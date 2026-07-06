@@ -63,7 +63,7 @@ Pegar
 Renombrar
 Nueva Carpeta
 Buscar
-Crear Archivo (ZIP/7z/...)
+Crear ZIP
 Probar Integridad
 Extraer Seleccionado
 Copiado al portapapeles!

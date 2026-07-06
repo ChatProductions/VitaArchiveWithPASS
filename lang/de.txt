@@ -63,7 +63,7 @@ Einfuegen
 Umbenennen
 Neuer Ordner
 Suchen
-Archiv erstellen (ZIP/7z/...)
+ZIP erstellen
 Integritaet pruefen
 Auswahl entpacken
 In Zwischenablage kopiert!

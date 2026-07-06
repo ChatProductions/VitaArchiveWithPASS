@@ -1,4 +1,4 @@
-﻿/*
+/*
  * VitaArchive - File Archiver & Browser for PS Vita
  * Created by theheroGAC.
  * Special thanks to TheFloW, Rinnegatamante, SKGleba, and all developers, hackers,
@@ -33,5 +33,6 @@ int filebrowser_navigate_down(FileBrowser *fb);
 int filebrowser_enter(FileBrowser *fb);
 void filebrowser_navigate_back(FileBrowser *fb);
 const char *filebrowser_get_selected_path(FileBrowser *fb);
+int filebrowser_search(FileBrowser *fb, const char *query, int global_search);
 
 #endif

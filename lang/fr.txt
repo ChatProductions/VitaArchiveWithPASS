@@ -63,7 +63,7 @@ Coller
 Renommer
 Nouveau Dossier
 Rechercher
-Créer une archive (ZIP/7z/...)
+Créer ZIP
 Tester l'integrite
 Extraire la selection
 Copie dans le presse-papiers !

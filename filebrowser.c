@@ -1,4 +1,4 @@
-﻿/*
+/*
  * VitaArchive - File Archiver & Browser for PS Vita
  * Created by theheroGAC.
  * Special thanks to TheFloW, Rinnegatamante, SKGleba, and all developers, hackers,
@@ -181,4 +181,90 @@ const char *filebrowser_get_selected_path(FileBrowser *fb) {
     }
 
     return full_path;
+}
+
+static void search_recursive(const char *root_path, const char *query, FileBrowser *fb) {
+    if (fb->file_count >= MAX_FILES) return;
+
+    SceUID dfd = sceIoDopen(root_path);
+    if (dfd < 0) return;
+
+    SceIoDirent dir;
+    char path[MAX_PATH];
+
+    while (sceIoDread(dfd, &dir) > 0 && fb->file_count < MAX_FILES) {
+        if (strcmp(dir.d_name, ".") == 0 || strcmp(dir.d_name, "..") == 0) continue;
+
+        snprintf(path, sizeof(path), "%s%s", root_path, dir.d_name);
+
+        int match = (stristr(dir.d_name, query) != NULL);
+        if (match) {
+            snprintf(fb->files[fb->file_count].name, sizeof(fb->files[fb->file_count].name), "%s%s", root_path + strlen(fb->current_path), dir.d_name);
+            fb->files[fb->file_count].is_directory = SCE_S_ISDIR(dir.d_stat.st_mode);
+            fb->files[fb->file_count].size = dir.d_stat.st_size;
+            fb->file_count++;
+        }
+
+        if (SCE_S_ISDIR(dir.d_stat.st_mode)) {
+            char next_root[MAX_PATH];
+            snprintf(next_root, sizeof(next_root), "%s%s/", root_path, dir.d_name);
+            search_recursive(next_root, query, fb);
+        }
+    }
+    sceIoDclose(dfd);
+}
+
+int filebrowser_search(FileBrowser *fb, const char *query, int global_search) {
+    if (!query || strlen(query) == 0) {
+        fb->search_query[0] = '\0';
+        return filebrowser_refresh(fb);
+    }
+
+    fb->search_query[0] = '\0';
+    fb->file_count = 0;
+    memset(fb->selection_mask, 0, sizeof(fb->selection_mask));
+
+    if (global_search) {
+        if (strcmp(fb->current_path, "/") == 0) {
+            const char *partitions[] = {"ux0:", "ur0:", "uma0:", "sd0:", "gro0:", "grw0:"};
+            int num_partitions = sizeof(partitions) / sizeof(partitions[0]);
+            for (int i = 0; i < num_partitions; i++) {
+                char root_with_slash[64];
+                snprintf(root_with_slash, sizeof(root_with_slash), "%s/", partitions[i]);
+                SceIoStat stat;
+                if (sceIoGetstat(partitions[i], &stat) >= 0 && SCE_S_ISDIR(stat.st_mode)) {
+                    search_recursive(root_with_slash, query, fb);
+                }
+            }
+        } else {
+            search_recursive(fb->current_path, query, fb);
+        }
+    } else {
+        char start_path[MAX_PATH];
+        if (fb->selected_index >= 0 && fb->selected_index < fb->file_count && fb->files[fb->selected_index].is_directory) {
+            if (strcmp(fb->current_path, "/") == 0) {
+                snprintf(start_path, sizeof(start_path), "%s/", fb->files[fb->selected_index].name);
+            } else {
+                strncpy(start_path, fb->current_path, sizeof(start_path) - 1);
+                start_path[sizeof(start_path) - 1] = '\0';
+                int len = strlen(start_path);
+                if (len > 0 && start_path[len - 1] != '/') {
+                    strncat(start_path, "/", sizeof(start_path) - len - 1);
+                }
+                strncat(start_path, fb->files[fb->selected_index].name, sizeof(start_path) - strlen(start_path) - 1);
+                strncat(start_path, "/", sizeof(start_path) - strlen(start_path) - 1);
+            }
+        } else {
+            strncpy(start_path, fb->current_path, sizeof(start_path) - 1);
+            start_path[sizeof(start_path) - 1] = '\0';
+            int len = strlen(start_path);
+            if (len > 0 && start_path[len - 1] != '/') {
+                strncat(start_path, "/", sizeof(start_path) - len - 1);
+            }
+        }
+        search_recursive(start_path, query, fb);
+    }
+
+    fb->selected_index = 0;
+    return 0;
 }

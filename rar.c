@@ -1,4 +1,4 @@
-﻿/*
+/*
  * VitaArchive - File Archiver & Browser for PS Vita
  * Created by theheroGAC.
  * Special thanks to TheFloW, Rinnegatamante, SKGleba, and all developers, hackers,
@@ -17,7 +17,7 @@
 #include "zip.h"
 
 int sceIoMkdir(const char *path, int mode);
-extern uint64_t worker_processed_bytes;
+extern volatile uint64_t worker_processed_bytes;
 
 static struct archive *rar_archive = NULL;
 

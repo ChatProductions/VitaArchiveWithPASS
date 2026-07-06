@@ -1,4 +1,4 @@
-﻿/*
+/*
  * VitaArchive - File Archiver & Browser for PS Vita
  * Created by theheroGAC.
  * Special thanks to TheFloW, Rinnegatamante, SKGleba, and all developers, hackers,
@@ -16,6 +16,7 @@
 #include <psp2/promoterutil.h>
 #include <psp2/kernel/threadmgr.h>
 
+#include "globals.h"
 #include "vpk.h"
 #include "zip.h"
 #include "head_bin.h"
@@ -39,7 +40,6 @@ typedef struct SfoEntry {
     uint32_t totalsize;
     uint32_t dataofs;
 } __attribute__((packed)) SfoEntry;
-
 
 typedef struct {
     uint32_t state[5];
@@ -152,7 +152,6 @@ static void sha1_final(SHA1_CTX *context, uint8_t digest[20]) {
         digest[i] = (uint8_t)((context->state[i >> 2] >> ((3 - (i & 3)) * 8)) & 255);
     }
 }
-
 
 static void fpkg_hmac(const uint8_t* data, unsigned int len, uint8_t hmac[16]) {
     SHA1_CTX ctx;
@@ -331,33 +330,27 @@ static int make_head(const char *path) {
     uint32_t len;
     uint32_t out;
 
-
     char titleid[16] = {0};
     snprintf(tmp_path, sizeof(tmp_path), "%s/sce_sys/param.sfo", path);
     if (get_sfo_string(tmp_path, "TITLE_ID", titleid, sizeof(titleid)) < 0) {
         return -1;
     }
 
-
     char contentid[48] = {0};
     get_sfo_string(tmp_path, "CONTENT_ID", contentid, sizeof(contentid));
-
 
     uint8_t *head_bin = malloc(tpl_head_bin_len);
     if (!head_bin) return -1;
     memcpy(head_bin, tpl_head_bin, tpl_head_bin_len);
-
 
     char full_title_id[48];
     snprintf(full_title_id, sizeof(full_title_id), "EP9000-%s_00-0000000000000000", titleid);
     strncpy((char*)&head_bin[0x30], strlen(contentid) > 0 ? contentid : full_title_id, 47);
     head_bin[0x30 + 47] = '\0';
 
-
     len = ntohl(*(uint32_t*)&head_bin[0xD0]);
     fpkg_hmac(&head_bin[0], len, hmac);
     memcpy(&head_bin[len], hmac, 16);
-
 
     off = ntohl(*(uint32_t*)&head_bin[0x8]);
     len = ntohl(*(uint32_t*)&head_bin[0x10]);
@@ -365,15 +358,12 @@ static int make_head(const char *path) {
     fpkg_hmac(&head_bin[off], len - 64, hmac);
     memcpy(&head_bin[out], hmac, 16);
 
-
     len = ntohl(*(uint32_t*)&head_bin[0xE8]);
     fpkg_hmac(&head_bin[0], len, hmac);
     memcpy(&head_bin[len], hmac, 16);
 
-
     snprintf(tmp_path, sizeof(tmp_path), "%s/sce_sys/package", path);
     sceIoMkdir(tmp_path, 0777);
-
 
     snprintf(tmp_path, sizeof(tmp_path), "%s/sce_sys/package/head.bin", path);
     SceUID fd = sceIoOpen(tmp_path, SCE_O_WRONLY | SCE_O_TRUNC | SCE_O_CREAT, 0777);
@@ -401,7 +391,6 @@ static int promote_pkg(const char *path) {
     if (res < 0) {
         return res;
     }
-
 
     int state = 0;
     do {
@@ -431,6 +420,10 @@ static int install_extracted_vpk(const char *vpk_path, int *progress) {
         free(vpk_info);
         return -1;
     }
+
+    worker_total_bytes = vpk_info->total_size;
+    worker_processed_bytes = 0;
+    worker_start_time = sceKernelGetSystemTimeWide();
 
     remove_path_recursive(VPK_PKG_DIR);
     ensure_parent_dirs(VPK_PKG_DIR);
@@ -473,14 +466,29 @@ static int install_extracted_vpk(const char *vpk_path, int *progress) {
 int archive_contains_homebrew(const ArchiveInfo *info) {
     if (!info) return 0;
 
+    int has_eboot = 0;
+    int has_sfo = 0;
     for (int i = 0; i < info->file_count; i++) {
-        const char *name = path_basename(info->files[i].filename);
-        if (strcasecmp(name, "eboot.bin") == 0) {
-            return 1;
+        const char *name = info->files[i].filename;
+        const char *base = path_basename(name);
+        if (strcasecmp(base, "eboot.bin") == 0) {
+            has_eboot = 1;
+        }
+        
+        char lower_path[1024];
+        strncpy(lower_path, name, sizeof(lower_path) - 1);
+        lower_path[sizeof(lower_path) - 1] = '\0';
+        for (int j = 0; lower_path[j]; j++) {
+            if (lower_path[j] >= 'A' && lower_path[j] <= 'Z') {
+                lower_path[j] = lower_path[j] + ('a' - 'A');
+            }
+        }
+        if (strstr(lower_path, "sce_sys/param.sfo") != NULL) {
+            has_sfo = 1;
         }
     }
 
-    return 0;
+    return (has_eboot && has_sfo);
 }
 
 int vpk_install_homebrew_from_archive(ArchiveInfo *archive_info, int *progress) {
@@ -553,7 +561,7 @@ int vpk_install_from_zip(ArchiveInfo *zip_info, int vpk_index, int *progress) {
     char vpk_temp[512];
     snprintf(vpk_temp, sizeof(vpk_temp), "%s/install.vpk", VPK_TEMP_DIR);
 
-    if (zip_extract_file_to(zip_info->archive_path, vpk_index, vpk_temp, zip_info) < 0) {
+    if (zip_extract_file_to(zip_info->archive_path, vpk_index, vpk_temp, zip_info, progress) < 0) {
         return -2;
     }
 
@@ -571,5 +579,6 @@ int archive_can_smart_install(const ArchiveInfo *info) {
     if (!info || !info->is_open) return 0;
     const char *ext = strrchr(info->archive_path, '.');
     int is_zip = ext && strcasecmp(ext, ".zip") == 0;
-    return is_zip && archive_contains_homebrew(info);
+    int is_vpk = ext && strcasecmp(ext, ".vpk") == 0;
+    return (is_zip || is_vpk) && archive_contains_homebrew(info);
 }

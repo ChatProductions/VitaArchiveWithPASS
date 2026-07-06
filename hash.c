@@ -1,4 +1,4 @@
-﻿/*
+/*
  * VitaArchive - File Archiver & Browser for PS Vita
  * Created by theheroGAC.
  * Special thanks to TheFloW, Rinnegatamante, SKGleba, and all developers, hackers,
@@ -10,8 +10,6 @@
 #include <string.h>
 #include <psp2/io/fcntl.h>
 #include <psp2/io/stat.h>
-
-
 
 #define S11 7
 #define S12 12
@@ -219,8 +217,6 @@ static void MD5_Transform(uint32_t state[4], const uint8_t block[64]) {
     memset((void *)x, 0, sizeof(x));
 }
 
-
-
 #define ROTR(x, n) (((x) >> (n)) | ((x) << (32 - (n))))
 
 #define CH(x, y, z) (((x) & (y)) ^ (~(x) & (z)))
@@ -337,8 +333,6 @@ void SHA256_Final(uint8_t digest[32], SHA256_CTX *context) {
 
     memset((void *)context, 0, sizeof(*context));
 }
-
-
 
 int calculate_file_hashes(const char *filepath, char *md5_out, char *sha256_out, volatile int *cancel_flag, volatile int *progress) {
     SceUID fd = sceIoOpen(filepath, SCE_O_RDONLY, 0);

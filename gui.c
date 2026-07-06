@@ -1,4 +1,4 @@
-﻿/*
+/*
  * VitaArchive - File Archiver & Browser for PS Vita
  * Created by theheroGAC.
  * Special thanks to TheFloW, Rinnegatamante, SKGleba, and all developers, hackers,
@@ -22,12 +22,6 @@
 #include "vpk.h"
 #include "ftp.h"
 #include "psarc.h"
-
-
-
-
-
-
 
 int is_archive_file(const char *filename) {
     return is_zip_file(filename) || is_vpk_file(filename) || 
@@ -102,10 +96,6 @@ int is_viewable_text_file(const char *filename) {
     }
     return 0;
 }
-
-
-
-
 
 void show_toast(const char *msg, uint32_t color) {
     strncpy(toast_msg, msg, sizeof(toast_msg) - 1);
@@ -184,6 +174,26 @@ void get_file_visuals(const char *path, int is_directory, const char **icon, uin
         if ((ext && strcasecmp(ext, ".self") == 0) || strcasecmp(filename, "eboot.bin") == 0) {
             *icon = "[SELF]";
             *icon_color = RGBA8(155, 89, 182, 255);
+        } else if (ext && (strcasecmp(ext, ".png") == 0 || strcasecmp(ext, ".jpg") == 0 || 
+                           strcasecmp(ext, ".jpeg") == 0 || strcasecmp(ext, ".bmp") == 0 || 
+                           strcasecmp(ext, ".gif") == 0)) {
+            *icon = "[IMG]";
+            *icon_color = RGBA8(129, 212, 250, 255); 
+        } else if (ext && (strcasecmp(ext, ".at9") == 0 || strcasecmp(ext, ".wav") == 0 || 
+                           strcasecmp(ext, ".ogg") == 0 || strcasecmp(ext, ".mp3") == 0)) {
+            *icon = "[SND]";
+            *icon_color = RGBA8(244, 143, 177, 255); 
+        } else if (ext && (strcasecmp(ext, ".txt") == 0 || strcasecmp(ext, ".ini") == 0 || 
+                           strcasecmp(ext, ".xml") == 0 || strcasecmp(ext, ".sfo") == 0 || 
+                           strcasecmp(ext, ".json") == 0 || strcasecmp(ext, ".yml") == 0 ||
+                           strcasecmp(ext, ".yaml") == 0 || strcasecmp(ext, ".log") == 0)) {
+            *icon = "[TXT]";
+            *icon_color = RGBA8(201, 209, 217, 255); 
+        } else if (ext && (strcasecmp(ext, ".suprx") == 0 || strcasecmp(ext, ".skprx") == 0 || 
+                           strcasecmp(ext, ".prx") == 0 || strcasecmp(ext, ".bin") == 0 || 
+                           strcasecmp(ext, ".elf") == 0)) {
+            *icon = "[BIN]";
+            *icon_color = RGBA8(186, 104, 200, 255); 
         } else {
             *icon = "[FILE]";
             *icon_color = RGBA8(110, 118, 129, 255);
@@ -195,6 +205,9 @@ const char *get_file_type_label(const char *path, int is_directory) {
     if (is_directory) {
         return language_get(&lang, STR_FOLDER);
     }
+    
+    LanguageCode curr_lang = language_get_current(&lang);
+    
     if (is_vpk_file(path)) {
         return "VPK";
     }
@@ -219,6 +232,47 @@ const char *get_file_type_label(const char *path, int is_directory) {
     if (is_psarc_file(path)) {
         return "PSARC";
     }
+    
+    const char *ext = strrchr(path, '.');
+    if (ext) {
+        if (strcasecmp(ext, ".png") == 0 || strcasecmp(ext, ".jpg") == 0 || 
+            strcasecmp(ext, ".jpeg") == 0 || strcasecmp(ext, ".bmp") == 0 || 
+            strcasecmp(ext, ".gif") == 0) {
+            return (curr_lang == LANG_IT) ? "Immagine" :
+                   (curr_lang == LANG_ES) ? "Imagen" :
+                   (curr_lang == LANG_FR) ? "Image" :
+                   (curr_lang == LANG_DE) ? "Bild" :
+                   "Image";
+        }
+        if (strcasecmp(ext, ".at9") == 0 || strcasecmp(ext, ".wav") == 0 || 
+            strcasecmp(ext, ".ogg") == 0 || strcasecmp(ext, ".mp3") == 0) {
+            return (curr_lang == LANG_IT) ? "Audio" :
+                   (curr_lang == LANG_ES) ? "Audio" :
+                   (curr_lang == LANG_FR) ? "Audio" :
+                   (curr_lang == LANG_DE) ? "Audio" :
+                   "Audio";
+        }
+        if (strcasecmp(ext, ".txt") == 0 || strcasecmp(ext, ".ini") == 0 || 
+            strcasecmp(ext, ".xml") == 0 || strcasecmp(ext, ".sfo") == 0 || 
+            strcasecmp(ext, ".json") == 0 || strcasecmp(ext, ".yml") == 0 ||
+            strcasecmp(ext, ".yaml") == 0 || strcasecmp(ext, ".log") == 0) {
+            return (curr_lang == LANG_IT) ? "Testo" :
+                   (curr_lang == LANG_ES) ? "Texto" :
+                   (curr_lang == LANG_FR) ? "Texte" :
+                   (curr_lang == LANG_DE) ? "Text" :
+                   "Text";
+        }
+        if (strcasecmp(ext, ".suprx") == 0 || strcasecmp(ext, ".skprx") == 0 || 
+            strcasecmp(ext, ".prx") == 0 || strcasecmp(ext, ".bin") == 0 || 
+            strcasecmp(ext, ".elf") == 0 || strcasecmp(ext, ".self") == 0) {
+            return (curr_lang == LANG_IT) ? "Eseguibile" :
+                   (curr_lang == LANG_ES) ? "Ejecutable" :
+                   (curr_lang == LANG_FR) ? "Executable" :
+                   (curr_lang == LANG_DE) ? "Ausführbar" :
+                   "Executable";
+        }
+    }
+    
     return language_get(&lang, STR_FILE);
 }
 
@@ -364,13 +418,54 @@ void draw_browser() {
         language_get(&lang, STR_PATH), browser.current_path);
     
     uint64_t free_sp = 0, total_sp = 0;
+    int tw = 0;
     if (strcmp(browser.current_path, "/") != 0 && get_partition_free_space(browser.current_path, &free_sp, &total_sp) == 0) {
         char free_buf[32], total_buf[32], space_str[128];
         format_size(free_buf, free_sp);
         format_size(total_buf, total_sp);
         snprintf(space_str, sizeof(space_str), "%s / %s free", free_buf, total_buf);
-        int tw = vita2d_pgf_text_width(font, 0.8f, space_str);
+        tw = vita2d_pgf_text_width(font, 0.8f, space_str);
         vita2d_pgf_draw_textf(font, 950 - tw, 70, RGBA8(139, 148, 158, 255), 0.8f, "%s", space_str);
+    }
+
+    if (strcmp(browser.current_path, "/") != 0) {
+        char info_str[128] = {0};
+        int files_count = browser.file_count;
+        LanguageCode cl = language_get_current(&lang);
+        const char *items_lbl = 
+            (cl == LANG_IT) ? "elementi" :
+            (cl == LANG_ES) ? "elementos" :
+            (cl == LANG_FR) ? "Ã©lÃ©ments" :
+            (cl == LANG_DE) ? "Elemente" :
+            (cl == LANG_JPN) ? "å€‹ã®é …ç›®" :
+            "items";
+            
+        if (browser.file_count > 0 && browser.selected_index >= 0 && browser.selected_index < browser.file_count) {
+            FileInfo *sel_file = &browser.files[browser.selected_index];
+            if (!sel_file->is_directory) {
+                char size_buf[32];
+                format_size(size_buf, sel_file->size);
+                const char *sel_lbl = (cl == LANG_JPN) ? "é¸æŠž" : "Sel";
+                snprintf(info_str, sizeof(info_str), "%d %s | %s: %s", files_count, items_lbl, sel_lbl, size_buf);
+            } else {
+                snprintf(info_str, sizeof(info_str), "%d %s", files_count, items_lbl);
+            }
+        } else {
+            snprintf(info_str, sizeof(info_str), "%d %s", files_count, items_lbl);
+        }
+
+        char path_buf[1024];
+        snprintf(path_buf, sizeof(path_buf), "%s: %s", language_get(&lang, STR_PATH), browser.current_path);
+        int path_w = vita2d_pgf_text_width(font, 0.8f, path_buf);
+        int info_x = 10 + path_w + 30;
+        if (info_x < 500) {
+            info_x = 500;
+        }
+        int info_w = vita2d_pgf_text_width(font, 0.8f, info_str);
+        int max_x = (tw > 0) ? (950 - tw - 10) : 950;
+        if (info_x + info_w < max_x) {
+            vita2d_pgf_draw_textf(font, info_x, 70, RGBA8(139, 148, 158, 255), 0.8f, "%s", info_str);
+        }
     }
     
     int header_y = 85;
@@ -511,7 +606,15 @@ void draw_browser_footer() {
         snprintf(o_str, sizeof(o_str), "O: %s", language_get(&lang, STR_BACK));
         snprintf(sq_str, sizeof(sq_str), "SQ: %s", language_get(&lang, STR_DELETE));
         snprintf(tri_str, sizeof(tri_str), "TRI: %s", language_get(&lang, STR_ACTIONS));
-        snprintf(sel_str, sizeof(sel_str), "SEL: FTP Server");
+        LanguageCode curr_lang = language_get_current(&lang);
+        const char *conn_label = 
+            (curr_lang == LANG_IT) ? "Connessione" :
+            (curr_lang == LANG_ES) ? "Conexión" :
+            (curr_lang == LANG_FR) ? "Connexion" :
+            (curr_lang == LANG_DE) ? "Verbindung" :
+            (curr_lang == LANG_JPN) ? "接続選択" :
+            "Connection";
+        snprintf(sel_str, sizeof(sel_str), "SEL: %s", conn_label);
         snprintf(start_str, sizeof(start_str), "START: %s",
             (language_get_current(&lang) == LANG_IT) ? "Impostazioni" :
             (language_get_current(&lang) == LANG_ES) ? "Ajustes" :
@@ -774,7 +877,7 @@ void draw_installing(int success) {
     vita2d_draw_rectangle(100, panel_y, 760, 200, RGBA8(22, 27, 34, 255));
     vita2d_draw_rectangle(100, panel_y, 760, 1, RGBA8(31, 111, 235, 255));
 
-    if (extract_progress < 100) {
+    if (worker_running || extract_progress < 100) {
         vita2d_pgf_draw_textf(font, 120, panel_y + 40, RGBA8(240, 246, 252, 255), 1.2f, "%s: %d%%",
             language_get(&lang, STR_PROGRESS), extract_progress);
 
@@ -845,12 +948,11 @@ void draw_compress_format_select() {
     int line_height = 40;
     const char *formats[] = {
         "ZIP (.zip)",
-        "7Z (.7z)",
         "TAR (.tar)",
         "TAR.GZ (.tar.gz)",
         "TAR.BZ2 (.tar.bz2)"
     };
-    int formats_count = 5;
+    int formats_count = 4;
 
     for (int i = 0; i < formats_count; i++) {
         int y = start_y + (i * line_height);
@@ -1082,6 +1184,271 @@ void draw_ftp_server() {
     draw_footer(actions, 1);
 }
 
+void draw_usb_connection_screen() {
+    vita2d_draw_rectangle(0, 0, 960, 50, RGBA8(21, 26, 33, 255));
+    
+    LanguageCode curr_lang = language_get_current(&lang);
+    const char *title = 
+        (curr_lang == LANG_IT) ? "Collegamento USB" :
+        (curr_lang == LANG_ES) ? "Conexión USB" :
+        (curr_lang == LANG_FR) ? "Connexion USB" :
+        (curr_lang == LANG_DE) ? "USB-Verbindung" :
+        (curr_lang == LANG_JPN) ? "USB接続" :
+        "USB Connection";
+
+    vita2d_pgf_draw_textf(font, 10, 30, RGBA8(240, 246, 252, 255), 1.0f, "%s - %s", 
+        language_get(&lang, STR_APP_TITLE), title);
+        
+    int panel_y = 120;
+    vita2d_draw_rectangle(150, panel_y, 660, 260, RGBA8(22, 27, 34, 255));
+    vita2d_draw_rectangle(150, panel_y, 660, 1, RGBA8(46, 204, 113, 255)); 
+    
+    const char *status_label = 
+        (curr_lang == LANG_IT) ? "Collegamento USB attivo" :
+        (curr_lang == LANG_ES) ? "Conexión USB activa" :
+        (curr_lang == LANG_FR) ? "Connexion USB active" :
+        (curr_lang == LANG_DE) ? "USB-Verbindung aktiv" :
+        (curr_lang == LANG_JPN) ? "USB接続中" :
+        "USB Connection Active";
+
+    vita2d_pgf_draw_textf(font, 180, panel_y + 40, RGBA8(240, 246, 252, 255), 1.2f, status_label);
+    
+    const char *desc_label = 
+        (curr_lang == LANG_IT) ? "La partizione ux0: è montata come dispositivo USB sul tuo PC." :
+        (curr_lang == LANG_ES) ? "La partición ux0: está montada como dispositivo USB en tu PC." :
+        (curr_lang == LANG_FR) ? "La partition ux0: est montée en tant que périphérique USB sur votre PC." :
+        (curr_lang == LANG_DE) ? "Die Partition ux0: ist als USB-Gerät auf Ihrem PC eingebunden." :
+        (curr_lang == LANG_JPN) ? "ux0: パーティションが PC に USB デバイスとしてマウントされています。" :
+        "ux0: partition is mounted as a USB device on your PC.";
+
+    if (curr_lang == LANG_JPN) {
+        vita2d_pgf_draw_textf(font, 180, panel_y + 95, RGBA8(201, 209, 217, 255), 1.0f, "ux0: パーティションが PC に");
+        vita2d_pgf_draw_textf(font, 180, panel_y + 130, RGBA8(201, 209, 217, 255), 1.0f, "USB デバイスとしてマウントされています。");
+    } else {
+        if (strlen(desc_label) > 60) {
+            char desc1[128] = {0};
+            char desc2[128] = {0};
+            int split_idx = 60;
+            while (split_idx > 0 && desc_label[split_idx] != ' ') {
+                split_idx--;
+            }
+            if (split_idx == 0) split_idx = 60;
+            strncpy(desc1, desc_label, split_idx);
+            strncpy(desc2, desc_label + split_idx + 1, sizeof(desc2) - 1);
+            
+            vita2d_pgf_draw_textf(font, 180, panel_y + 95, RGBA8(201, 209, 217, 255), 1.0f, "%s", desc1);
+            vita2d_pgf_draw_textf(font, 180, panel_y + 130, RGBA8(201, 209, 217, 255), 1.0f, "%s", desc2);
+        } else {
+            vita2d_pgf_draw_textf(font, 180, panel_y + 100, RGBA8(201, 209, 217, 255), 1.0f, "%s", desc_label);
+        }
+    }
+    
+    const char *info_msg = 
+        (curr_lang == LANG_IT) ? "Assicurati di scollegare l'unità in sicurezza dal PC prima." :
+        (curr_lang == LANG_ES) ? "Asegúrese de expulsar la unidad de forma segura de la PC." :
+        (curr_lang == LANG_FR) ? "Assurez-vous d'éjecter le lecteur en toute sécurité du PC." :
+        (curr_lang == LANG_DE) ? "Stellen Sie sicher, das Laufwerk am PC sicher zu entfernen." :
+        (curr_lang == LANG_JPN) ? "解除する前に PC から安全に取り外してください。" :
+        "Make sure to safely eject the drive from the PC first.";
+
+    vita2d_pgf_draw_textf(font, 180, panel_y + 190, RGBA8(139, 148, 158, 255), 0.85f, "%s", info_msg);
+    
+    char o_str[64];
+    const char *disconnect_label = 
+        (curr_lang == LANG_IT) ? "Disconnetti USB" :
+        (curr_lang == LANG_ES) ? "Desconectar USB" :
+        (curr_lang == LANG_FR) ? "Déconnecter l'USB" :
+        (curr_lang == LANG_DE) ? "USB trennen" :
+        (curr_lang == LANG_JPN) ? "USB接続を解除" :
+        "Disconnect USB";
+        
+    snprintf(o_str, sizeof(o_str), "O: %s", disconnect_label);
+    const char *actions[] = {o_str};
+    draw_footer(actions, 1);
+}
+
+void draw_connection_select() {
+    draw_browser();
+    vita2d_draw_rectangle(0, 0, 960, 544, RGBA8(0, 0, 0, 100));
+    
+    int menu_w = 340;
+    int menu_h = 160;
+    int menu_x = (960 - menu_w) / 2;
+    int menu_y = (544 - menu_h) / 2;
+    vita2d_draw_rectangle(menu_x, menu_y, menu_w, menu_h, RGBA8(22, 27, 34, 245));
+    vita2d_draw_rectangle(menu_x, menu_y, menu_w, 2, RGBA8(31, 111, 235, 255));
+    
+    LanguageCode curr_lang = language_get_current(&lang);
+    const char *title = 
+        (curr_lang == LANG_IT) ? "Seleziona Connessione" :
+        (curr_lang == LANG_ES) ? "Seleccionar Conexión" :
+        (curr_lang == LANG_FR) ? "Sélectionner Connexion" :
+        (curr_lang == LANG_DE) ? "Verbindung auswählen" :
+        (curr_lang == LANG_JPN) ? "接続方法の選択" :
+        "Select Connection";
+        
+    vita2d_pgf_draw_textf(font, menu_x + 20, menu_y + 30, RGBA8(240, 246, 252, 255), 1.0f, "%s", title);
+    vita2d_draw_rectangle(menu_x + 10, menu_y + 42, menu_w - 20, 1, RGBA8(48, 54, 61, 255));
+    
+    const char *options[2];
+    options[0] = 
+        (curr_lang == LANG_IT) ? "Collegamento USB" :
+        (curr_lang == LANG_ES) ? "Conexión USB" :
+        (curr_lang == LANG_FR) ? "Connexion USB" :
+        (curr_lang == LANG_DE) ? "USB-Verbindung" :
+        (curr_lang == LANG_JPN) ? "USB接続" :
+        "USB Connection";
+        
+    options[1] = 
+        (curr_lang == LANG_IT) ? "Server FTP" :
+        (curr_lang == LANG_ES) ? "Servidor FTP" :
+        (curr_lang == LANG_FR) ? "Serveur FTP" :
+        (curr_lang == LANG_DE) ? "FTP-Server" :
+        (curr_lang == LANG_JPN) ? "FTPサーバー" :
+        "FTP Server";
+        
+    int start_y = menu_y + 60;
+    int row_h = 30;
+    
+    for (int i = 0; i < 2; i++) {
+        int ry = start_y + (i * row_h);
+        int is_selected = (i == connection_select_idx);
+        
+        if (is_selected) {
+            vita2d_draw_rectangle(menu_x + 10, ry - 4, menu_w - 20, row_h, RGBA8(31, 111, 235, 40));
+        }
+        
+        uint32_t text_color = is_selected ? RGBA8(31, 111, 235, 255) : RGBA8(201, 209, 217, 255);
+        vita2d_pgf_draw_textf(font, menu_x + 30, ry + 18, text_color, 0.95f, "%s", options[i]);
+    }
+    
+    char o_str[64];
+    char x_str[64];
+    
+    const char *confirm_label = 
+        (curr_lang == LANG_IT) ? "Conferma" :
+        (curr_lang == LANG_ES) ? "Confirmar" :
+        (curr_lang == LANG_FR) ? "Confirmer" :
+        (curr_lang == LANG_DE) ? "Bestätigen" :
+        (curr_lang == LANG_JPN) ? "決定" :
+        "Confirm";
+        
+    const char *cancel_label = language_get(&lang, STR_CANCEL);
+    
+    snprintf(x_str, sizeof(x_str), "X: %s", confirm_label);
+    snprintf(o_str, sizeof(o_str), "O: %s", cancel_label);
+    
+    const char *foot_actions[] = {x_str, o_str};
+    draw_footer(foot_actions, 2);
+}
+
+void draw_usb_device_select() {
+    draw_browser();
+    vita2d_draw_rectangle(0, 0, 960, 544, RGBA8(0, 0, 0, 100));
+    
+    int menu_w = 340;
+    int menu_h = 220;
+    int menu_x = (960 - menu_w) / 2;
+    int menu_y = (544 - menu_h) / 2;
+    vita2d_draw_rectangle(menu_x, menu_y, menu_w, menu_h, RGBA8(22, 27, 34, 245));
+    vita2d_draw_rectangle(menu_x, menu_y, menu_w, 2, RGBA8(31, 111, 235, 255));
+    
+    LanguageCode curr_lang = language_get_current(&lang);
+    const char *title = 
+        (curr_lang == LANG_IT) ? "Seleziona Dispositivo" :
+        (curr_lang == LANG_ES) ? "Seleccionar Disp. USB" :
+        (curr_lang == LANG_FR) ? "Sélect. Périphérique" :
+        (curr_lang == LANG_DE) ? "USB-Gerät auswählen" :
+        (curr_lang == LANG_JPN) ? "USBデバイスの選択" :
+        "Select USB Device";
+        
+    vita2d_pgf_draw_textf(font, menu_x + 20, menu_y + 30, RGBA8(240, 246, 252, 255), 1.0f, "%s", title);
+    vita2d_draw_rectangle(menu_x + 10, menu_y + 42, menu_w - 20, 1, RGBA8(48, 54, 61, 255));
+    
+    const char *options[4];
+    options[0] = "SD2Vita";
+    options[1] = "Memory Card";
+    options[2] = "psvsd";
+    options[3] = 
+        (curr_lang == LANG_IT) ? "Game Card" :
+        (curr_lang == LANG_ES) ? "Game Card" :
+        (curr_lang == LANG_FR) ? "Carte de Jeu" :
+        (curr_lang == LANG_DE) ? "Spielkarte" :
+        (curr_lang == LANG_JPN) ? "ゲームカード" :
+        "Game Card";
+        
+    int start_y = menu_y + 60;
+    int row_h = 30;
+    
+    for (int i = 0; i < 4; i++) {
+        int ry = start_y + (i * row_h);
+        int is_selected = (i == usb_device_select_idx);
+        
+        if (is_selected) {
+            vita2d_draw_rectangle(menu_x + 10, ry - 4, menu_w - 20, row_h, RGBA8(31, 111, 235, 40));
+        }
+        
+        uint32_t text_color = is_selected ? RGBA8(31, 111, 235, 255) : RGBA8(201, 209, 217, 255);
+        vita2d_pgf_draw_textf(font, menu_x + 30, ry + 18, text_color, 0.95f, "%s", options[i]);
+    }
+    
+    char o_str[64];
+    char x_str[64];
+    
+    const char *confirm_label = 
+        (curr_lang == LANG_IT) ? "Conferma" :
+        (curr_lang == LANG_ES) ? "Confirmar" :
+        (curr_lang == LANG_FR) ? "Confirmer" :
+        (curr_lang == LANG_DE) ? "Bestätigen" :
+        (curr_lang == LANG_JPN) ? "決定" :
+        "Confirm";
+        
+    const char *cancel_label = language_get(&lang, STR_CANCEL);
+    
+    snprintf(x_str, sizeof(x_str), "X: %s", confirm_label);
+    snprintf(o_str, sizeof(o_str), "O: %s", cancel_label);
+    
+    const char *foot_actions[] = {x_str, o_str};
+    draw_footer(foot_actions, 2);
+}
+
+void draw_usb_error_dialog() {
+    draw_browser();
+    vita2d_draw_rectangle(0, 0, 960, 544, RGBA8(0, 0, 0, 100));
+    
+    int menu_w = 420;
+    int menu_h = 160;
+    int menu_x = (960 - menu_w) / 2;
+    int menu_y = (544 - menu_h) / 2;
+    vita2d_draw_rectangle(menu_x, menu_y, menu_w, menu_h, RGBA8(22, 27, 34, 245));
+    vita2d_draw_rectangle(menu_x, menu_y, menu_w, 2, RGBA8(231, 76, 60, 255)); 
+    
+    LanguageCode curr_lang = language_get_current(&lang);
+    const char *title = 
+        (curr_lang == LANG_IT) ? "Errore Connessione" :
+        (curr_lang == LANG_ES) ? "Error de Conexión" :
+        (curr_lang == LANG_FR) ? "Erreur de Connexion" :
+        (curr_lang == LANG_DE) ? "Verbindungsfehler" :
+        (curr_lang == LANG_JPN) ? "接続エラー" :
+        "Connection Error";
+        
+    vita2d_pgf_draw_textf(font, menu_x + 20, menu_y + 30, RGBA8(231, 76, 60, 255), 1.0f, "%s", title);
+    vita2d_draw_rectangle(menu_x + 10, menu_y + 42, menu_w - 20, 1, RGBA8(48, 54, 61, 255));
+    
+    
+    int text_w = vita2d_pgf_text_width(font, 0.85f, usb_error_message);
+    int text_x = menu_x + (menu_w - text_w) / 2;
+    int text_y = menu_y + 95;
+    vita2d_pgf_draw_textf(font, text_x, text_y, RGBA8(201, 209, 217, 255), 0.85f, "%s", usb_error_message);
+    
+    char o_str[64];
+    const char *back_label = language_get(&lang, STR_BACK);
+    snprintf(o_str, sizeof(o_str), "O: %s", back_label);
+    
+    const char *err_actions[] = {o_str};
+    draw_footer(err_actions, 1);
+}
+
 void draw_settings() {
     vita2d_draw_rectangle(0, 0, 960, 50, RGBA8(21, 26, 33, 255));
 
@@ -1093,12 +1460,9 @@ void draw_settings() {
         (curr_lang == LANG_DE) ? "Einstellungen" :
         (curr_lang == LANG_JPN) ? "設定" :
         "Settings";
-
-    vita2d_pgf_draw_textf(font, 10, 30, RGBA8(240, 246, 252, 255), 1.0f, "%s - %s",
-        language_get(&lang, STR_APP_TITLE), title);
-
+    vita2d_pgf_draw_textf(font, 10, 30, RGBA8(240, 246, 252, 255), 1.0f, "%s", title);
     int panel_x = 80, panel_w = 800, panel_y = 100;
-    vita2d_draw_rectangle(panel_x, panel_y, panel_w, 300, RGBA8(22, 27, 34, 255));
+    vita2d_draw_rectangle(panel_x, panel_y, panel_w, 340, RGBA8(22, 27, 34, 255));
     vita2d_draw_rectangle(panel_x, panel_y, panel_w, 2, RGBA8(31, 111, 235, 255));
 
     int row0_y = panel_y + 30;
@@ -1131,7 +1495,7 @@ void draw_settings() {
 
     const char *comp_label =
         (curr_lang == LANG_IT) ? "Livello di Compressione" :
-        (curr_lang == LANG_ES) ? "Nivel de Compresion" :
+        (curr_lang == LANG_ES) ? "Nivel di Compresion" :
         (curr_lang == LANG_FR) ? "Niveau de compression" :
         (curr_lang == LANG_DE) ? "Kompressionsstufe" :
         (curr_lang == LANG_JPN) ? "圧縮レベル" :
@@ -1153,7 +1517,38 @@ void draw_settings() {
         (settings_item_selected == 1) ? RGBA8(31, 111, 235, 255) : RGBA8(240, 246, 252, 255),
         1.0f, "%s", comp_val);
 
-    vita2d_pgf_draw_textf(font, panel_x + 24, panel_y + 240,
+    vita2d_draw_rectangle(panel_x + 10, panel_y + 200, panel_w - 20, 1, RGBA8(48, 54, 61, 255));
+
+    int row2_y = panel_y + 230;
+    if (settings_item_selected == 2)
+        vita2d_draw_rectangle(panel_x + 10, row2_y - 8, panel_w - 20, 56, RGBA8(31, 111, 235, 40));
+
+    const char *usb_label =
+        (curr_lang == LANG_IT) ? "Dispositivo USB" :
+        (curr_lang == LANG_ES) ? "Dispositivo USB" :
+        (curr_lang == LANG_FR) ? "Périphérique USB" :
+        (curr_lang == LANG_DE) ? "USB-Gerät" :
+        (curr_lang == LANG_JPN) ? "USBデバイス" :
+        "USB Device";
+    vita2d_pgf_draw_textf(font, panel_x + 24, row2_y + 20,
+        RGBA8(201, 209, 217, 255), 1.0f, "%s", usb_label);
+
+    const char *usb_names[] = {"Auto-detect", "SD2Vita", "Memory Card", "Internal Memory"};
+    if (curr_lang == LANG_IT) { usb_names[0] = "Automatico"; usb_names[3] = "Memoria Interna"; }
+    else if (curr_lang == LANG_ES) { usb_names[0] = "Automático"; usb_names[3] = "Memoria Interna"; }
+    else if (curr_lang == LANG_FR) { usb_names[0] = "Automatique"; usb_names[3] = "Mémoire Interne"; }
+    else if (curr_lang == LANG_DE) { usb_names[0] = "Automatisch"; usb_names[3] = "Interner Speicher"; }
+    else if (curr_lang == LANG_JPN) { usb_names[0] = "自動検出"; usb_names[3] = "内蔵メモリー"; }
+    int ud = (settings_usb_device < 0) ? 0 : (settings_usb_device > 3) ? 3 : settings_usb_device;
+    char usb_val[64];
+    snprintf(usb_val, sizeof(usb_val), (settings_item_selected == 2) ? "< %s >" : "%s",
+        usb_names[ud]);
+    int udw = vita2d_pgf_text_width(font, 1.0f, usb_val);
+    vita2d_pgf_draw_textf(font, panel_x + panel_w - udw - 24, row2_y + 20,
+        (settings_item_selected == 2) ? RGBA8(31, 111, 235, 255) : RGBA8(240, 246, 252, 255),
+        1.0f, "%s", usb_val);
+
+    vita2d_pgf_draw_textf(font, panel_x + 24, panel_y + 305,
         RGBA8(100, 110, 120, 255), 0.85f,
         (curr_lang == LANG_IT) ? "SU/GIU: Riga   SX/DX: Cambia valore   O: Salva e Indietro" :
         (curr_lang == LANG_ES) ? "AR/AB: Fila   IZ/DE: Cambiar valor   O: Guardar y Volver" :
@@ -1212,7 +1607,7 @@ void draw_actions_menu() {
     vita2d_draw_rectangle(0, 0, 960, 544, RGBA8(0, 0, 0, 100));
     
     int menu_w = 320;
-    int menu_h = 440;
+    int menu_h = 470;
     int menu_x = (960 - menu_w) / 2;
     int menu_y = (544 - menu_h) / 2;
     vita2d_draw_rectangle(menu_x, menu_y, menu_w, menu_h, RGBA8(22, 27, 34, 245));
@@ -1222,60 +1617,82 @@ void draw_actions_menu() {
     vita2d_pgf_draw_textf(font, menu_x + 20, menu_y + 30, RGBA8(240, 246, 252, 255), 1.0f, "%s", title);
     vita2d_draw_rectangle(menu_x + 10, menu_y + 45, menu_w - 20, 1, RGBA8(48, 54, 61, 255));
     
-    const char *options[13];
+    const char *options[14];
     options[0] = language_get(&lang, STR_COPY);
     options[1] = language_get(&lang, STR_CUT);
     options[2] = language_get(&lang, STR_PASTE);
     options[3] = language_get(&lang, STR_RENAME);
     options[4] = language_get(&lang, STR_NEW_FOLDER);
-    options[5] = language_get(&lang, STR_SEARCH);
-    options[6] = language_get(&lang, STR_SELECT_MULTIPLE);
-    options[7] = language_get(&lang, STR_DELETE);
-
+    
     LanguageCode curr_lang = language_get_current(&lang);
     if (curr_lang == LANG_IT) {
-        options[8] = "Calcola MD5/SHA-256";
-        options[9] = "Visualizzatore Hex";
-        options[10] = "Proprieta & Permessi";
-        options[11] = "Modifica File";
-        options[12] = "Installa App (Promuovi)";
+        options[5] = "Cerca (Locale)";
+        options[6] = "Cerca (Globale)";
     } else if (curr_lang == LANG_ES) {
-        options[8] = "Calcular MD5/SHA-256";
-        options[9] = "Visor Hexadecimal";
-        options[10] = "Propiedades & Permisos";
-        options[11] = "Editar Archivo";
-        options[12] = "Instalar App (Promover)";
+        options[5] = "Buscar (Local)";
+        options[6] = "Buscar (Global)";
     } else if (curr_lang == LANG_FR) {
-        options[8] = "Calculer MD5/SHA-256";
-        options[9] = "Lecteur Hexadecimal";
-        options[10] = "Proprietes & Permissions";
-        options[11] = "Modifier Fichier";
-        options[12] = "Installer App (Promouvoir)";
+        options[5] = "Rechercher (Local)";
+        options[6] = "Rechercher (Global)";
     } else if (curr_lang == LANG_DE) {
-        options[8] = "MD5/SHA-256 berechnen";
-        options[9] = "Hex-Betrachter";
-        options[10] = "Eigenschaften & Berechtig.";
-        options[11] = "Datei bearbeiten";
-        options[12] = "App installieren (Promote)";
+        options[5] = "Suchen (Lokal)";
+        options[6] = "Suchen (Global)";
     } else if (curr_lang == LANG_JPN) {
-        options[8] = "MD5/SHA-256\xe3\x82\x92\xe8\xa8\x88\xe7\xa6\x97";
-        options[9] = "16\xe9\x80\xb2\xe6\x95\xb0\xe3\x83\x93\xe3\x83\xa5\xe3\x83\xbc\xe3\x82\xa2";
-        options[10] = "\xe3\x83\x97\xe3\x83\xad\xe3\x83\xb1\xe3\x83\x86\xe3\x82\xa3\xe3\x81\xa8\xe3\x82\xa2\xe3\x82\xaf\xe3\x82\xb5\xe3\x82\xb9\xe6\xa8\xa9";
-        options[11] = "\xe3\x83\x95\xe3\x82\xa1\xe3\x82\xa4\xe3\x83\xab\xe3\x82\x92\xe7\xb7\xa8\xe9\x9b\x86";
-        options[12] = "\xe3\x82\xa2\xe3\x83\x97\xe3\x83\xb3\xe3\x82\x92\xe3\x82\xa4\xe3\x83\xb3\xe3\x82\xb9\xe3\x83\x88\xe3\x83\xbc\xe3\x83\xab (\xe6\x98\x87\xe6\xa0\xbc)";
+        options[5] = "\xe6\xa4\x9c\xe7\xb4\xa2 (\xe3\x83\xad\xe3\x83\xbc\xe3\x82\xab\xe3\x83\xab)";
+        options[6] = "\xe6\xa4\x9c\xe7\xb4\xa2 (\xe3\x82\xb0\xe3\x83\xad\xe3\x83\xbc\xe3\x83\x90\xe3\x83\xab)";
     } else {
-        options[8] = "Calculate MD5/SHA-256";
-        options[9] = "Hex Viewer";
-        options[10] = "Properties & Perms";
-        options[11] = "Edit File";
-        options[12] = "Install App (Promote)";
+        options[5] = "Search (Local)";
+        options[6] = "Search (Global)";
     }
-    int num_options = 13;
+    
+    options[7] = language_get(&lang, STR_SELECT_MULTIPLE);
+    options[8] = language_get(&lang, STR_DELETE);
+
+    int is_dir = (browser.file_count > 0) ? browser.files[browser.selected_index].is_directory : 0;
+    const char *sel_name = (browser.file_count > 0) ? browser.files[browser.selected_index].name : "";
+    int is_vpk = !is_dir && is_vpk_file(sel_name);
+
+    if (curr_lang == LANG_IT) {
+        options[9] = "Calcola MD5/SHA-256";
+        options[10] = "Visualizzatore Hex";
+        options[11] = "Proprieta & Permessi";
+        options[12] = "Modifica File";
+        options[13] = is_vpk ? "Installa VPK" : "Installa App (Promuovi)";
+    } else if (curr_lang == LANG_ES) {
+        options[9] = "Calcular MD5/SHA-256";
+        options[10] = "Visor Hexadecimal";
+        options[11] = "Propiedades & Permisos";
+        options[12] = "Editar Archivo";
+        options[13] = is_vpk ? "Instalar VPK" : "Instalar App (Promover)";
+    } else if (curr_lang == LANG_FR) {
+        options[9] = "Calculer MD5/SHA-256";
+        options[10] = "Lecteur Hexadecimal";
+        options[11] = "Proprietes & Permissions";
+        options[12] = "Modifier Fichier";
+        options[13] = is_vpk ? "Installer VPK" : "Installer App (Promouvoir)";
+    } else if (curr_lang == LANG_DE) {
+        options[9] = "MD5/SHA-256 berechnen";
+        options[10] = "Hex-Betrachter";
+        options[11] = "Eigenschaften & Berechtig.";
+        options[12] = "Datei bearbeiten";
+        options[13] = is_vpk ? "VPK installieren" : "App installieren (Promote)";
+    } else if (curr_lang == LANG_JPN) {
+        options[9] = "MD5/SHA-256\xe3\x82\x92\xe8\xa8\x88\xe7\xa6\x97";
+        options[10] = "16\xe9\x80\xb2\xe6\x95\xb0\xe3\x83\x93\xe3\x83\xa5\xe3\x83\xbc\xe3\x82\xa2";
+        options[11] = "\xe3\x83\x97\xe3\x83\xad\xe3\x83\xb1\xe3\x83\x86\xe3\x82\xa3\xe3\x81\xa8\xe3\x82\xa2\xe3\x82\xaf\xe3\x82\xb5\xe3\x82\xb9\xe6\xa8\xa9";
+        options[12] = "\xe3\x83\x95\xe3\x82\xa1\xe3\x82\xa4\xe3\x83\xab\xe3\x82\x92\xe7\xb7\xa8\xe9\x9b\x86";
+        options[13] = is_vpk ? "VPK\xe3\x82\x92\xe3\x82\xa4\xe3\x83\xb3\xe3\x82\xb9\xe3\x83\x88\xe3\x83\xbc\xe3\x83\xab" : "\xe3\x82\xa2\xe3\x83\x97\xe3\x83\xb3\xe3\x82\x92\xe3\x82\xa4\xe3\x83\xb3\xe3\x82\xb9\xe3\x83\x88\xe3\x83\xbc\xe3\x83\xab (\xe6\x98\x87\xe6\xa0\xbc)";
+    } else {
+        options[9] = "Calculate MD5/SHA-256";
+        options[10] = "Hex Viewer";
+        options[11] = "Properties & Perms";
+        options[12] = "Edit File";
+        options[13] = is_vpk ? "Install VPK" : "Install App (Promote)";
+    }
+    int num_options = 14;
     
     int start_y = menu_y + 60;
     int row_h = 28;
-    int is_dir = (browser.file_count > 0) ? browser.files[browser.selected_index].is_directory : 0;
-    const char *sel_name = (browser.file_count > 0) ? browser.files[browser.selected_index].name : "";
     const char *sel_ext = strrchr(sel_name, '.');
     int can_edit = !is_dir && (is_viewable_text_file(sel_name) || (sel_ext && strcasecmp(sel_ext, ".sfo") == 0));
     int can_promote = 0;
@@ -1287,14 +1704,15 @@ void draw_actions_menu() {
             can_promote = 1;
         }
     }
+    int can_install_vpk = is_vpk;
 
     for (int i = 0; i < num_options; i++) {
         int ry = start_y + (i * row_h);
         int is_selected = (i == actions_menu_selected);
         int is_disabled = (i == 2 && clipboard_file_count == 0) ||
-                          ((i == 8 || i == 9) && is_dir) ||
-                          (i == 11 && !can_edit) ||
-                          (i == 12 && !can_promote);
+                          ((i == 9 || i == 10) && is_dir) ||
+                          (i == 12 && !can_edit) ||
+                          (i == 13 && !can_promote && !can_install_vpk);
         
         if (is_selected) {
             vita2d_draw_rectangle(menu_x + 10, ry - 4, menu_w - 20, row_h, RGBA8(31, 111, 235, 40));

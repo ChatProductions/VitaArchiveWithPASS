@@ -1,4 +1,4 @@
-﻿/*
+/*
  * VitaArchive - File Archiver & Browser for PS Vita
  * Created by theheroGAC.
  * Special thanks to TheFloW, Rinnegatamante, SKGleba, and all developers, hackers,
@@ -43,5 +43,9 @@ void draw_integrity_result();
 void draw_hash_view();
 void draw_hex_view();
 void draw_properties_view();
+void draw_usb_connection_screen();
+void draw_connection_select();
+void draw_usb_device_select();
+void draw_usb_error_dialog();
 
 #endif

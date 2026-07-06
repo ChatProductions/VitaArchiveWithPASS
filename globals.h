@@ -1,4 +1,4 @@
-﻿/*
+/*
  * VitaArchive - File Archiver & Browser for PS Vita
  * Created by theheroGAC.
  * Special thanks to TheFloW, Rinnegatamante, SKGleba, and all developers, hackers,
@@ -36,8 +36,14 @@ typedef enum {
     MODE_INTEGRITY_RESULT,
     MODE_HASH_VIEW,
     MODE_HEX_VIEW,
-    MODE_PROPERTIES_VIEW
+    MODE_PROPERTIES_VIEW,
+    MODE_USB_CONNECTION,
+    MODE_CONNECTION_SELECT,
+    MODE_USB_DEVICE_SELECT,
+    MODE_USB_ERROR
 } AppMode;
+
+extern char usb_error_message[256];
 
 typedef enum {
     INSTALL_MODE_VPK,
@@ -58,7 +64,7 @@ typedef struct {
 extern AppMode current_mode;
 extern FileBrowser browser;
 extern ArchiveInfo archive_info;
-extern int extract_progress;
+extern volatile int extract_progress;
 extern int scroll_offset;
 extern int archive_scroll;
 
@@ -76,6 +82,7 @@ extern Language lang;
 extern vita2d_pgf *font;
 extern int settings_selected;
 extern int compress_level;
+extern int settings_usb_device;
 extern int settings_item_selected;
 extern int compress_format_selected;
 extern char extraction_dest_path[MAX_PATH];
@@ -90,14 +97,16 @@ extern int clipboard_is_move;
 extern int archive_selection_mask[512];
 extern int actions_menu_selected;
 extern int archive_actions_selected;
+extern int connection_select_idx;
+extern int usb_device_select_idx;
 
-extern uint64_t worker_processed_bytes;
-extern uint64_t worker_total_bytes;
+extern volatile uint64_t worker_processed_bytes;
+extern volatile uint64_t worker_total_bytes;
 extern uint64_t worker_start_time;
 
 extern SceUID worker_thread_id;
-extern int worker_running;
-extern int worker_result;
+extern volatile int worker_running;
+extern volatile int worker_result;
 extern WorkerArgs worker_args;
 
 extern char toast_msg[160];
@@ -107,18 +116,15 @@ extern uint32_t toast_color;
 extern char ftp_ip[32];
 extern unsigned short ftp_port;
 
-
 extern uint32_t hex_offset;
 extern uint64_t hex_file_size;
 extern char hex_filepath[1024];
-
 
 extern char hash_md5[33];
 extern char hash_sha256[65];
 extern char hash_filepath[1024];
 extern volatile int hash_progress;
 extern volatile int hash_cancel;
-
 
 extern char prop_filepath[1024];
 extern SceIoStat prop_stat;

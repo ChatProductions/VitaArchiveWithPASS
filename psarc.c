@@ -1,4 +1,4 @@
-﻿/*
+/*
  * VitaArchive - File Archiver & Browser for PS Vita
  * Created by theheroGAC.
  * Special thanks to TheFloW, Rinnegatamante, SKGleba, and all developers, hackers,
@@ -16,7 +16,7 @@
 #include "psarc.h"
 #include <stdint.h>
 
-extern uint64_t worker_processed_bytes;
+extern volatile uint64_t worker_processed_bytes;
 
 #define MAX_PATH_LENGTH 1024
 #define TRANSFER_SIZE (256 * 1024)
@@ -108,7 +108,6 @@ typedef struct SceFiosStat {
     int64_t ino;
     int64_t mode;
 } SceFiosStat;
-
 
 int sceFiosInitialize(const SceFiosParams *params);
 void sceFiosTerminate();

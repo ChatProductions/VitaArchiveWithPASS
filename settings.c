@@ -1,4 +1,4 @@
-﻿/*
+/*
  * VitaArchive - File Archiver & Browser for PS Vita
  * Created by theheroGAC.
  * Special thanks to TheFloW, Rinnegatamante, SKGleba, and all developers, hackers,
@@ -17,6 +17,7 @@ void save_settings() {
         int lang_code = language_get_current(&lang);
         sceIoWrite(fd, &lang_code, sizeof(lang_code));
         sceIoWrite(fd, &compress_level, sizeof(compress_level));
+        sceIoWrite(fd, &settings_usb_device, sizeof(settings_usb_device));
         sceIoClose(fd);
     }
 }
@@ -29,6 +30,9 @@ void load_settings() {
         if (sceIoRead(fd, &compress_level, sizeof(compress_level)) != (int)sizeof(compress_level))
             compress_level = 1; 
         if (compress_level < 0 || compress_level > 2) compress_level = 1;
+        if (sceIoRead(fd, &settings_usb_device, sizeof(settings_usb_device)) != (int)sizeof(settings_usb_device))
+            settings_usb_device = 0;
+        if (settings_usb_device < 0 || settings_usb_device > 3) settings_usb_device = 0;
         sceIoClose(fd);
         language_set(&lang, (LanguageCode)lang_code);
     }

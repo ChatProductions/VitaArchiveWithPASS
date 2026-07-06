@@ -1,10 +1,9 @@
-﻿/*
+/*
  * VitaArchive - File Archiver & Browser for PS Vita
  * Created by theheroGAC.
  * Special thanks to TheFloW, Rinnegatamante, SKGleba, and all developers, hackers,
  * and contributors of the PlayStation Vita homebrew scene.
  */
-
 
 #include <psp2/ctrl.h>
 #include <psp2/kernel/processmgr.h>
@@ -34,6 +33,7 @@
 #include "settings.h"
 #include "clipboard.h"
 #include "hash.h"
+#include "usb_connection.h"
 
 pid_t waitpid(pid_t pid, int *status, int options) {
     errno = ENOSYS;
@@ -143,7 +143,7 @@ AppMode current_mode = MODE_BROWSER;
 AppMode preview_return_mode = MODE_ARCHIVE_VIEW;
 FileBrowser browser;
 ArchiveInfo archive_info;
-int extract_progress = 0;
+volatile int extract_progress = 0;
 int scroll_offset = 0;
 int archive_scroll = 0;
 
@@ -161,6 +161,7 @@ Language lang;
 vita2d_pgf *font = NULL;
 int settings_selected = 0;
 int compress_level = 1; 
+int settings_usb_device = 0;
 int settings_item_selected = 0; 
 int compress_format_selected = 0;
 char extraction_dest_path[MAX_PATH];
@@ -176,14 +177,17 @@ int clipboard_is_move = 0;
 int archive_selection_mask[512] = {0};
 int actions_menu_selected = 0;
 int archive_actions_selected = 0;
+int connection_select_idx = 0;
+int usb_device_select_idx = 0;
+char usb_error_message[256] = {0};
 
-uint64_t worker_processed_bytes = 0;
-uint64_t worker_total_bytes = 0;
+volatile uint64_t worker_processed_bytes = 0;
+volatile uint64_t worker_total_bytes = 0;
 uint64_t worker_start_time = 0;
 
 SceUID worker_thread_id = -1;
-int worker_running = 0;
-int worker_result = 0;
+volatile int worker_running = 0;
+volatile int worker_result = 0;
 WorkerArgs worker_args;
 
 char toast_msg[160] = {0};
@@ -203,7 +207,6 @@ char hash_filepath[1024] = {0};
 volatile int hash_progress = 0;
 volatile int hash_cancel = 0;
 
-
 char prop_filepath[1024] = {0};
 SceIoStat prop_stat;
 int prop_selected_row = 0;
@@ -214,10 +217,6 @@ int preview_selected_line = 0;
 int preview_is_sfo = 0;
 void *sfo_buffer = NULL;
 int sfo_buffer_size = 0;
-
-
-
-
 
 static void load_preview_file(const char *path) {
     preview_line_count = 0;
@@ -350,8 +349,6 @@ static void load_sfo_preview(const char *path) {
         preview_line_count++;
     }
 }
-
-
 
 static int try_open_archive(const char *path, ArchiveInfo *info) {
     if (is_zip_file(path) || is_vpk_file(path) ||
@@ -525,7 +522,7 @@ static int worker_thread_func(SceSize args, void *argp) {
     
     if (wargs->mode == 0) {
         worker_total_bytes = archive_info.total_size;
-        worker_result = archive_extract_all_custom(wargs->dest, &archive_info, &extract_progress);
+        worker_result = archive_extract_all_custom(wargs->dest, &archive_info, (int *)&extract_progress);
     } else if (wargs->mode == 1) {
         if (wargs->index >= 0 && wargs->index < archive_info.file_count) {
             worker_total_bytes = archive_info.files[wargs->index].uncompressed_size;
@@ -536,11 +533,11 @@ static int worker_thread_func(SceSize args, void *argp) {
         extract_progress = 100;
     } else if (wargs->mode == 2) {
         worker_total_bytes = archive_info.total_size;
-        worker_result = vpk_install_homebrew_from_archive(&archive_info, &extract_progress);
+        worker_result = vpk_install_homebrew_from_archive(&archive_info, (int *)&extract_progress);
     } else if (wargs->mode == 3) {
         if (wargs->index >= 0 && wargs->index < archive_info.file_count) {
             worker_total_bytes = archive_info.files[wargs->index].uncompressed_size;
-            worker_result = vpk_install_from_zip(&archive_info, wargs->index, &extract_progress);
+            worker_result = vpk_install_from_zip(&archive_info, wargs->index, (int *)&extract_progress);
         } else {
             worker_result = -1;
         }
@@ -572,7 +569,7 @@ static int worker_thread_func(SceSize args, void *argp) {
         filebrowser_refresh(&browser);
     } else if (wargs->mode == 5) {
         worker_total_bytes = archive_info.total_size;
-        worker_result = archive_test_integrity(&archive_info, &extract_progress);
+        worker_result = archive_test_integrity(&archive_info, (int *)&extract_progress);
     } else if (wargs->mode == 6) {
         worker_total_bytes = 0;
         for (int i = 0; i < clipboard_file_count; i++) {
@@ -644,11 +641,39 @@ static void ensure_system_folders() {
     sceIoMkdir("ux0:/user/00/savedata", 0777);
 }
 
+static void show_loading_dialog(const char *msg) {
+    vita2d_start_drawing();
+    vita2d_clear_screen();
+    
+    
+    if (current_mode == MODE_BROWSER || current_mode == MODE_ACTIONS_MENU) {
+        draw_browser();
+        draw_browser_footer();
+    } else if (current_mode == MODE_ARCHIVE_VIEW || current_mode == MODE_ARCHIVE_ACTIONS_MENU) {
+        draw_archive_view();
+    }
+    draw_battery_status();
+    draw_toast();
+    
+    int box_w = 420;
+    int box_h = 100;
+    int box_x = (960 - box_w) / 2;
+    int box_y = (544 - box_h) / 2;
+    
+    vita2d_draw_rectangle(box_x, box_y, box_w, box_h, RGBA8(22, 27, 34, 255));
+    vita2d_draw_rectangle(box_x, box_y, box_w, 2, RGBA8(31, 111, 235, 255));
+    
+    int msg_w = vita2d_pgf_text_width(font, 1.0f, msg);
+    vita2d_pgf_draw_textf(font, box_x + (box_w - msg_w) / 2, box_y + 55, RGBA8(240, 246, 252, 255), 1.0f, "%s", msg);
+    
+    vita2d_end_drawing();
+    vita2d_swap_buffers();
+}
+
 int main() {
     vita2d_init();
     vita2d_set_clear_color(RGBA8(13, 17, 23, 255));
     sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG);
-
 
     load_sce_paf();
     sceSysmoduleLoadModuleInternal(SCE_SYSMODULE_INTERNAL_PROMOTER_UTIL);
@@ -724,6 +749,16 @@ int main() {
                                 strncpy(preview_filename, path_basename(selected), sizeof(preview_filename) - 1);
                                 preview_filename[sizeof(preview_filename) - 1] = '\0';
                             } else {
+                                LanguageCode curr_lang = language_get_current(&lang);
+                                const char *loading_msg =
+                                    (curr_lang == LANG_IT) ? "Caricamento in corso, attendere prego..." :
+                                    (curr_lang == LANG_ES) ? "Cargando, por favor espere..." :
+                                    (curr_lang == LANG_FR) ? "Chargement en cours, veuillez patienter..." :
+                                    (curr_lang == LANG_DE) ? "Laden, bitte warten..." :
+                                    (curr_lang == LANG_JPN) ? "読み込み中、しばらくお待ちください..." :
+                                    "Loading, please wait...";
+                                show_loading_dialog(loading_msg);
+
                                 int open_res = try_open_archive_with_password(selected, &archive_info);
                                 if (open_res >= 0) {
                                     current_mode = MODE_ARCHIVE_VIEW;
@@ -746,21 +781,8 @@ int main() {
                         filebrowser_navigate_back(&browser);
                     }
                 } else if (pressed & SCE_CTRL_SELECT) {
-                    if (ftp_server_start(ftp_ip, &ftp_port)) {
-                        current_mode = MODE_FTP_SERVER;
-                        char ftp_toast[128];
-                        snprintf(ftp_toast, sizeof(ftp_toast), "FTP: %s:%d", ftp_ip, ftp_port);
-                        show_toast(ftp_toast, RGBA8(52, 152, 219, 255));
-                    } else {
-                        LanguageCode cl = language_get_current(&lang);
-                        const char *emsg =
-                            (cl == LANG_IT) ? "Errore avvio FTP" :
-                            (cl == LANG_ES) ? "Error al iniciar FTP" :
-                            (cl == LANG_FR) ? "Erreur demarrage FTP" :
-                            (cl == LANG_DE) ? "FTP-Startfehler" :
-                            "FTP server failed to start";
-                        show_toast(emsg, RGBA8(231, 76, 60, 255));
-                    }
+                    connection_select_idx = 0;
+                    current_mode = MODE_CONNECTION_SELECT;
                 } else if (pressed & SCE_CTRL_START) {
                     settings_selected = language_get_current(&lang);
                     current_mode = MODE_SETTINGS;
@@ -1094,7 +1116,13 @@ int main() {
                 } else if (install_done_frames > 0) {
                     install_done_frames--;
                     if (install_done_frames == 0) {
-                        current_mode = MODE_ARCHIVE_VIEW;
+                        if (archive_stack_depth > 0) {
+                            current_mode = MODE_ARCHIVE_VIEW;
+                        } else {
+                            archive_close_custom(&archive_info);
+                            current_mode = MODE_BROWSER;
+                            filebrowser_refresh(&browser);
+                        }
                     }
                 }
                 break;
@@ -1247,13 +1275,13 @@ int main() {
             case MODE_COMPRESS_FORMAT_SELECT:
                 if ((pressed | repeat_event) & SCE_CTRL_UP) {
                     if (compress_format_selected > 0) compress_format_selected--;
-                    else compress_format_selected = 4;
+                    else compress_format_selected = 3;
                 } else if ((pressed | repeat_event) & SCE_CTRL_DOWN) {
-                    if (compress_format_selected < 4) compress_format_selected++;
+                    if (compress_format_selected < 3) compress_format_selected++;
                     else compress_format_selected = 0;
                 } else if (pressed & SCE_CTRL_CROSS) {
                     char archive_name[256] = {0};
-                    const char *extensions[] = {".zip", ".7z", ".tar", ".tar.gz", ".tar.bz2"};
+                    const char *extensions[] = {".zip", ".tar", ".tar.gz", ".tar.bz2"};
                     char prompt[128];
                     snprintf(prompt, sizeof(prompt), "Enter archive name (%s will be added)", extensions[compress_format_selected]);
                     
@@ -1283,7 +1311,11 @@ int main() {
                         strncpy(worker_args.dest, archive_path, sizeof(worker_args.dest) - 1);
                         worker_args.dest[sizeof(worker_args.dest) - 1] = '\0';
                         worker_args.mode = 4;
-                        worker_args.index = compress_format_selected;
+                        int format_type = compress_format_selected;
+                        if (format_type >= 1) {
+                            format_type += 1; 
+                        }
+                        worker_args.index = format_type;
                         
                         current_mode = MODE_EXTRACTING;
                         extract_progress = 0;
@@ -1396,6 +1428,7 @@ int main() {
                                         sceIoWrite(fd_out, preview_lines[i], strlen(preview_lines[i]));
                                         sceIoWrite(fd_out, "\r\n", 2);
                                     }
+
                                     sceIoClose(fd_out);
                                     LanguageCode cl = language_get_current(&lang);
                                     const char *msg = (cl == LANG_IT) ? "File salvato!" : "File saved!";
@@ -1450,16 +1483,16 @@ int main() {
                 if (pressed & SCE_CTRL_CIRCLE) {
                     ftp_server_stop();
                     current_mode = MODE_BROWSER;
-                filebrowser_refresh(&browser);
+                    filebrowser_refresh(&browser);
                 }
                 break;
             
             case MODE_ACTIONS_MENU:
                 if ((pressed | repeat_event) & SCE_CTRL_UP) {
                     if (actions_menu_selected > 0) actions_menu_selected--;
-                    else actions_menu_selected = 12;
+                    else actions_menu_selected = 13;
                 } else if ((pressed | repeat_event) & SCE_CTRL_DOWN) {
-                    if (actions_menu_selected < 12) actions_menu_selected++;
+                    if (actions_menu_selected < 13) actions_menu_selected++;
                     else actions_menu_selected = 0;
                 } else if (pressed & SCE_CTRL_CIRCLE) {
                     current_mode = MODE_BROWSER;
@@ -1510,6 +1543,7 @@ int main() {
                             current_mode = MODE_EXTRACTING;
                             extract_progress = 0;
                         }
+                        current_mode = MODE_BROWSER;
                     } else if (actions_menu_selected == 3) {
                         if (browser.file_count > 0) {
                             char new_name[256] = {0};
@@ -1545,21 +1579,47 @@ int main() {
                         }
                         current_mode = MODE_BROWSER;
                     } else if (actions_menu_selected == 5) {
-                        const char *title = language_get(&lang, STR_SEARCH);
-                        if (get_ime_input(browser.search_query, 120, title, NULL) == 0) {
-                            filebrowser_refresh(&browser);
+                        char query[128] = {0};
+                        const char *title = (language_get_current(&lang) == LANG_IT) ? "Cerca in questa cartella" : "Search in this folder";
+                        if (get_ime_input(query, 120, title, NULL) == 0) {
+                            LanguageCode curr_lang = language_get_current(&lang);
+                            const char *search_msg =
+                                (curr_lang == LANG_IT) ? "Ricerca in corso, attendere prego..." :
+                                (curr_lang == LANG_ES) ? "Búsqueda en curso, por favor espere..." :
+                                (curr_lang == LANG_FR) ? "Recherche en cours, veuillez patienter..." :
+                                (curr_lang == LANG_DE) ? "Suche läuft, bitte warten..." :
+                                (curr_lang == LANG_JPN) ? "検索中、しばらくお待ちください..." :
+                                "Searching, please wait...";
+                            show_loading_dialog(search_msg);
+                            filebrowser_search(&browser, query, 0);
                         }
                         current_mode = MODE_BROWSER;
                     } else if (actions_menu_selected == 6) {
+                        char query[128] = {0};
+                        const char *title = (language_get_current(&lang) == LANG_IT) ? "Cerca in tutta la console" : "Search in all console";
+                        if (get_ime_input(query, 120, title, NULL) == 0) {
+                            LanguageCode curr_lang = language_get_current(&lang);
+                            const char *search_msg =
+                                (curr_lang == LANG_IT) ? "Ricerca in corso, attendere prego..." :
+                                (curr_lang == LANG_ES) ? "Búsqueda en curso, por favor espere..." :
+                                (curr_lang == LANG_FR) ? "Recherche en cours, veuillez patienter..." :
+                                (curr_lang == LANG_DE) ? "Suche läuft, bitte warten..." :
+                                (curr_lang == LANG_JPN) ? "検索中、しばらくお待ちください..." :
+                                "Searching, please wait...";
+                            show_loading_dialog(search_msg);
+                            filebrowser_search(&browser, query, 1);
+                        }
+                        current_mode = MODE_BROWSER;
+                    } else if (actions_menu_selected == 7) {
                         current_mode = MODE_ZIP_CREATION;
                         memset(browser.selection_mask, 0, sizeof(browser.selection_mask));
-                    } else if (actions_menu_selected == 7) {
+                    } else if (actions_menu_selected == 8) {
                         if (browser.file_count > 0) {
                             current_mode = MODE_DELETE_CONFIRM;
                         } else {
                             current_mode = MODE_BROWSER;
                         }
-                    } else if (actions_menu_selected == 8) {
+                    } else if (actions_menu_selected == 9) {
                         if (browser.file_count > 0) {
                             int is_dir = browser.files[browser.selected_index].is_directory;
                             if (!is_dir) {
@@ -1581,7 +1641,7 @@ int main() {
                         } else {
                             current_mode = MODE_BROWSER;
                         }
-                    } else if (actions_menu_selected == 9) {
+                    } else if (actions_menu_selected == 10) {
                         if (browser.file_count > 0) {
                             int is_dir = browser.files[browser.selected_index].is_directory;
                             if (!is_dir) {
@@ -1595,7 +1655,7 @@ int main() {
                         } else {
                             current_mode = MODE_BROWSER;
                         }
-                    } else if (actions_menu_selected == 10) {
+                    } else if (actions_menu_selected == 11) {
                         if (browser.file_count > 0) {
                             snprintf(prop_filepath, sizeof(prop_filepath), "%s/%s", browser.current_path, browser.files[browser.selected_index].name);
                             memset(&prop_stat, 0, sizeof(prop_stat));
@@ -1614,7 +1674,7 @@ int main() {
                         } else {
                             current_mode = MODE_BROWSER;
                         }
-                    } else if (actions_menu_selected == 11) {
+                    } else if (actions_menu_selected == 12) {
                         if (browser.file_count > 0) {
                             int is_dir = browser.files[browser.selected_index].is_directory;
                             const char *name = browser.files[browser.selected_index].name;
@@ -1639,7 +1699,7 @@ int main() {
                         } else {
                             current_mode = MODE_BROWSER;
                         }
-                    } else if (actions_menu_selected == 12) {
+                    } else if (actions_menu_selected == 13) {
                         if (browser.file_count > 0) {
                             int is_dir = browser.files[browser.selected_index].is_directory;
                             const char *name = browser.files[browser.selected_index].name;
@@ -1669,13 +1729,26 @@ int main() {
                                     const char *msg = (cl == LANG_IT) ? "Errore promozione app!" : "Error promoting app!";
                                     show_toast(msg, RGBA8(231, 76, 60, 255));
                                 }
+                            } else if (!is_dir && is_vpk_file(name)) {
+                                char filepath[1024];
+                                snprintf(filepath, sizeof(filepath), "%s%s", browser.current_path, name);
+                                int open_res = try_open_archive_with_password(filepath, &archive_info);
+                                if (open_res >= 0) {
+                                    current_mode = MODE_INSTALLING;
+                                    current_install_mode = INSTALL_MODE_APP;
+                                    extract_progress = 0;
+                                } else {
+                                    show_toast(language_get(&lang, STR_CANNOT_OPEN), RGBA8(231, 76, 60, 255));
+                                }
                             }
                         }
-                        current_mode = MODE_BROWSER;
+                        if (current_mode != MODE_INSTALLING) {
+                            current_mode = MODE_BROWSER;
+                        }
                     }
                 }
                 break;
-                
+
             case MODE_ARCHIVE_ACTIONS_MENU:
                 if ((pressed | repeat_event) & SCE_CTRL_UP) {
                     if (archive_actions_selected > 0) archive_actions_selected--;
@@ -1712,12 +1785,13 @@ int main() {
                     }
                 }
                 break;
+
             case MODE_INTEGRITY_RESULT:
                 if (pressed & SCE_CTRL_CIRCLE) {
                     current_mode = MODE_ARCHIVE_VIEW;
                 }
                 break;
-                
+            
             case MODE_HASH_VIEW:
                 if (pressed & SCE_CTRL_CIRCLE) {
                     if (hash_progress < 100) {
@@ -1797,7 +1871,7 @@ int main() {
                     if (prop_checkboxes[5]) new_mode |= 0100;
                     change_stat.st_mode = new_mode;
                     
-                    sceIoChstat(prop_filepath, &change_stat, 0x0001 | 0x0002);
+                                        sceIoChstat(prop_filepath, &change_stat, 0x0001 | 0x0002);
                     filebrowser_refresh(&browser);
                     current_mode = MODE_BROWSER;
                 } else if ((pressed | repeat_event) & SCE_CTRL_UP) {
@@ -1808,6 +1882,110 @@ int main() {
                     else prop_selected_row = 0;
                 } else if (pressed & SCE_CTRL_CROSS) {
                     prop_checkboxes[prop_selected_row] = !prop_checkboxes[prop_selected_row];
+                }
+                break;
+
+            case MODE_USB_CONNECTION:
+                if (pressed & SCE_CTRL_CIRCLE) {
+                    usb_connection_stop();
+                    current_mode = MODE_BROWSER;
+                    filebrowser_refresh(&browser);
+                }
+                break;
+
+            case MODE_CONNECTION_SELECT:
+                if ((pressed | repeat_event) & SCE_CTRL_UP) {
+                    if (connection_select_idx > 0) connection_select_idx--;
+                    else connection_select_idx = 1;
+                } else if ((pressed | repeat_event) & SCE_CTRL_DOWN) {
+                    if (connection_select_idx < 1) connection_select_idx++;
+                    else connection_select_idx = 0;
+                } else if (pressed & SCE_CTRL_CIRCLE) {
+                    current_mode = MODE_BROWSER;
+                } else if (pressed & SCE_CTRL_CROSS) {
+                    if (connection_select_idx == 0) {
+                        usb_device_select_idx = 0;
+                        current_mode = MODE_USB_DEVICE_SELECT;
+                    } else if (connection_select_idx == 1) {
+                        if (ftp_server_start(ftp_ip, &ftp_port)) {
+                            current_mode = MODE_FTP_SERVER;
+                            char ftp_toast[128];
+                            snprintf(ftp_toast, sizeof(ftp_toast), "FTP: %s:%d", ftp_ip, ftp_port);
+                            show_toast(ftp_toast, RGBA8(52, 152, 219, 255));
+                        } else {
+                            LanguageCode cl = language_get_current(&lang);
+                            const char *emsg =
+                                (cl == LANG_IT) ? "Errore avvio FTP" :
+                                (cl == LANG_ES) ? "Error al iniciar FTP" :
+                                (cl == LANG_FR) ? "Erreur demarrage FTP" :
+                                (cl == LANG_DE) ? "FTP-Startfehler" :
+                                "FTP server failed to start";
+                            show_toast(emsg, RGBA8(231, 76, 60, 255));
+                        }
+                    }
+                }
+                break;
+
+            case MODE_USB_DEVICE_SELECT:
+                if ((pressed | repeat_event) & SCE_CTRL_UP) {
+                    if (usb_device_select_idx > 0) usb_device_select_idx--;
+                    else usb_device_select_idx = 3;
+                } else if ((pressed | repeat_event) & SCE_CTRL_DOWN) {
+                    if (usb_device_select_idx < 3) usb_device_select_idx++;
+                    else usb_device_select_idx = 0;
+                } else if (pressed & SCE_CTRL_CIRCLE) {
+                    current_mode = MODE_CONNECTION_SELECT;
+                } else if (pressed & SCE_CTRL_CROSS) {
+                    settings_usb_device = usb_device_select_idx + 1;
+                    if (usb_connection_start() == 0) {
+                        current_mode = MODE_USB_CONNECTION;
+                        LanguageCode cl = language_get_current(&lang);
+                        const char *msg =
+                            (cl == LANG_IT) ? "USB collegato" :
+                            (cl == LANG_ES) ? "USB conectado" :
+                            (cl == LANG_FR) ? "USB connecte" :
+                            (cl == LANG_DE) ? "USB verbunden" :
+                            "USB connected";
+                        show_toast(msg, RGBA8(46, 204, 113, 255));
+                    } else {
+                        LanguageCode cl = language_get_current(&lang);
+                        if (settings_usb_device == 3) {
+                            const char *emsg =
+                                (cl == LANG_IT) ? "psvsd non rilevata o non presente" :
+                                (cl == LANG_ES) ? "psvsd no detectada o no presente" :
+                                (cl == LANG_FR) ? "psvsd non détectée ou non présente" :
+                                (cl == LANG_DE) ? "psvsd nicht erkannt oder nicht vorhanden" :
+                                (cl == LANG_JPN) ? "psvsdが検出されないか、存在しません" :
+                                "psvsd not detected or not present";
+                            strncpy(usb_error_message, emsg, sizeof(usb_error_message) - 1);
+                        } else if (settings_usb_device == 4) {
+                            const char *emsg =
+                                (cl == LANG_IT) ? "Game Card non inserita o non rilevata" :
+                                (cl == LANG_ES) ? "Game Card no insertada o no detectada" :
+                                (cl == LANG_FR) ? "Carte de jeu non insérée ou non détectée" :
+                                (cl == LANG_DE) ? "Spielkarte nicht eingesetzt oder nicht erkannt" :
+                                (cl == LANG_JPN) ? "ゲームカードが挿入されていないか、検出されません" :
+                                "Game Card not inserted or not detected";
+                            strncpy(usb_error_message, emsg, sizeof(usb_error_message) - 1);
+                        } else {
+                            const char *emsg =
+                                (cl == LANG_IT) ? "Errore avvio USB" :
+                                (cl == LANG_ES) ? "Error al iniciar USB" :
+                                (cl == LANG_FR) ? "Erreur demarrage USB" :
+                                (cl == LANG_DE) ? "USB-Startfehler" :
+                                (cl == LANG_JPN) ? "USB起動エラー" :
+                                "USB connection failed to start";
+                            strncpy(usb_error_message, emsg, sizeof(usb_error_message) - 1);
+                        }
+                        usb_error_message[sizeof(usb_error_message) - 1] = '\0';
+                        current_mode = MODE_USB_ERROR;
+                    }
+                }
+                break;
+
+            case MODE_USB_ERROR:
+                if (pressed & (SCE_CTRL_CROSS | SCE_CTRL_CIRCLE)) {
+                    current_mode = MODE_USB_DEVICE_SELECT;
                 }
                 break;
         }
@@ -1866,7 +2044,7 @@ int main() {
             case MODE_INTEGRITY_RESULT:
                 draw_integrity_result();
                 break;
-            case MODE_HASH_VIEW:
+                        case MODE_HASH_VIEW:
                 draw_hash_view();
                 break;
             case MODE_HEX_VIEW:
@@ -1874,6 +2052,18 @@ int main() {
                 break;
             case MODE_PROPERTIES_VIEW:
                 draw_properties_view();
+                break;
+            case MODE_USB_CONNECTION:
+                draw_usb_connection_screen();
+                break;
+            case MODE_CONNECTION_SELECT:
+                draw_connection_select();
+                break;
+            case MODE_USB_DEVICE_SELECT:
+                draw_usb_device_select();
+                break;
+            case MODE_USB_ERROR:
+                draw_usb_error_dialog();
                 break;
         }
         

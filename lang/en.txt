@@ -63,7 +63,7 @@ Paste
 Rename
 New Folder
 Search
-Create Archive (ZIP/7z/...)
+Create ZIP
 Test Integrity
 Extract Selected
 Copied to clipboard!

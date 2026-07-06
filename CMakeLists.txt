@@ -44,6 +44,7 @@ add_executable(${PROJECT_NAME}
   settings.c
   clipboard.c
   hash.c
+  usb_connection.c
 )
 
 target_link_libraries(${PROJECT_NAME}
@@ -63,6 +64,9 @@ target_link_libraries(${PROJECT_NAME}
   SceIme_stub
   ScePgf_stub
   SceFios2_stub
+  SceUsbstorVStorDriver_stub
+  SceMtpIfDriver_stub
+  taihen_stub
   archive
   ftpvita
   freetype
@@ -87,6 +91,12 @@ vita_create_vpk(${PROJECT_NAME}.vpk
   FILE sce_sys/livearea/contents/bg.png sce_sys/livearea/contents/bg.png
   FILE sce_sys/livearea/contents/startup.png sce_sys/livearea/contents/startup.png
   FILE sce_sys/livearea/contents/template.xml sce_sys/livearea/contents/template.xml
+
+  # Modules
+  FILE module/kernel.skprx module/kernel.skprx
+  FILE module/patch.skprx module/patch.skprx
+  FILE module/umass.skprx module/umass.skprx
+  FILE module/usbdevice.skprx module/usbdevice.skprx
 
   # Language files
   FILE lang/it.txt lang/it.txt

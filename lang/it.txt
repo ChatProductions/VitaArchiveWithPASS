@@ -63,7 +63,7 @@ Incolla
 Rinomina
 Nuova Cartella
 Cerca
-Crea Archivio (ZIP/7z/...)
+Crea ZIP
 Verifica Integrita'
 Estrai Selezionati
 Copiato in memoria!

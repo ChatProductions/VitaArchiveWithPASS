@@ -1,4 +1,4 @@
-﻿/*
+/*
  * VitaArchive - File Archiver & Browser for PS Vita
  * Created by theheroGAC.
  * Special thanks to TheFloW, Rinnegatamante, SKGleba, and all developers, hackers,
@@ -35,7 +35,7 @@ int zip_open(const char *zip_path, ArchiveInfo *info);
 int zip_list_files(ArchiveInfo *info);
 int zip_extract_all(const char *dest, ArchiveInfo *info, int *progress);
 int zip_extract_file(const char *dest, int file_index, ArchiveInfo *info);
-int zip_extract_file_to(const char *archive_path, int file_index, const char *dest_path, ArchiveInfo *info);
+int zip_extract_file_to(const char *archive_path, int file_index, const char *dest_path, ArchiveInfo *info, int *progress);
 int zip_create(const char *zip_path, const char **files, int file_count);
 int archive_create_custom_format(const char *archive_path, const char **files, int file_count, int format_type);
 void zip_cancel(ArchiveInfo *info);

@@ -1,4 +1,4 @@
-﻿/*
+/*
  * VitaArchive - File Archiver & Browser for PS Vita
  * Created by theheroGAC.
  * Special thanks to TheFloW, Rinnegatamante, SKGleba, and all developers, hackers,
@@ -17,7 +17,7 @@
 #include "zip.h"
 
 int sceIoMkdir(const char *path, int mode);
-extern uint64_t worker_processed_bytes;
+extern volatile uint64_t worker_processed_bytes;
 
 static struct archive *zip_archive = NULL;
 
@@ -185,6 +185,14 @@ int zip_extract_all(const char *dest, ArchiveInfo *info, int *progress) {
     struct archive_entry *entry;
     int count = 0;
     char out_path[512];
+    uint64_t extracted_bytes = 0;
+    
+    int start_progress = (progress) ? *progress : 0;
+    int target_progress = 100;
+    if (dest && strstr(dest, "ptmp/pkg") != NULL) {
+        target_progress = 95;
+    }
+    int progress_range = target_progress - start_progress;
 
     while (archive_read_next_header(zip_archive, &entry) == ARCHIVE_OK) {
         if (info->cancel_flag) {
@@ -218,6 +226,13 @@ int zip_extract_all(const char *dest, ArchiveInfo *info, int *progress) {
                 while (archive_read_data_block(zip_archive, &buff, &size, &offset) == ARCHIVE_OK) {
                     sceIoWrite(fd, buff, size);
                     worker_processed_bytes += size;
+                    extracted_bytes += size;
+                    if (progress && info->total_size > 0 && progress_range > 0) {
+                        int calc = start_progress + (int)((extracted_bytes * progress_range) / info->total_size);
+                        if (calc > target_progress) calc = target_progress;
+                        if (calc < start_progress) calc = start_progress;
+                        *progress = calc;
+                    }
                 }
                 sceIoClose(fd);
             } else {
@@ -228,8 +243,12 @@ int zip_extract_all(const char *dest, ArchiveInfo *info, int *progress) {
         }
 
         count++;
-        if (progress && info->file_count > 0) {
-            *progress = (count * 100) / info->file_count;
+        // Usiamo il conteggio dei file come fallback SOLO se la dimensione totale in byte è zero
+        if (progress && info->total_size == 0 && info->file_count > 0 && progress_range > 0) {
+            int calc = start_progress + (count * progress_range) / info->file_count;
+            if (calc > target_progress) calc = target_progress;
+            if (calc < start_progress) calc = start_progress;
+            *progress = calc;
         }
     }
 
@@ -239,7 +258,7 @@ int zip_extract_all(const char *dest, ArchiveInfo *info, int *progress) {
     return 0;
 }
 
-int zip_extract_file_to(const char *archive_path, int file_index, const char *dest_path, ArchiveInfo *info) {
+int zip_extract_file_to(const char *archive_path, int file_index, const char *dest_path, ArchiveInfo *info, int *progress) {
     struct archive *archive = archive_read_new();
     archive_read_support_filter_all(archive);
     archive_read_support_format_all(archive);
@@ -280,10 +299,19 @@ int zip_extract_file_to(const char *archive_path, int file_index, const char *de
             const void *buff;
             size_t size;
             int64_t offset;
+            int64_t total_written = 0;
+            int64_t total_size = info->files[file_index].uncompressed_size;
 
             while (archive_read_data_block(archive, &buff, &size, &offset) == ARCHIVE_OK) {
                 sceIoWrite(fd, buff, size);
+                total_written += size;
                 worker_processed_bytes += size;
+                if (progress && total_size > 0) {
+                    int calc = (int)((total_written * 40) / total_size);
+                    if (calc > 40) calc = 40;
+                    if (calc < 0) calc = 0;
+                    *progress = calc;
+                }
             }
 
             sceIoClose(fd);
@@ -315,7 +343,7 @@ int zip_extract_file(const char *dest, int file_index, ArchiveInfo *info) {
     } else {
         snprintf(out_path, sizeof(out_path), "%s/%s", dest, filename);
     }
-    return zip_extract_file_to(info->archive_path, file_index, out_path, info);
+    return zip_extract_file_to(info->archive_path, file_index, out_path, info, NULL);
 }
 
 int archive_create_custom_format(const char *archive_path, const char **files, int file_count, int format_type) {
@@ -325,11 +353,13 @@ int archive_create_custom_format(const char *archive_path, const char **files, i
     char buff[16384];
     int len;
     SceUID fd;
+    int r;
 
     a = archive_write_new();
+    if (!a) return -3;
     
     if (format_type == 0) {
-        archive_write_set_format_zip(a);
+        if ((r = archive_write_set_format_zip(a)) != ARCHIVE_OK) goto write_init_error;
         if (compress_level == 0) {
             archive_write_set_options(a, "zip:compression=store");
         } else if (compress_level == 2) {
@@ -338,7 +368,7 @@ int archive_create_custom_format(const char *archive_path, const char **files, i
             archive_write_set_options(a, "zip:compression-level=6");
         }
     } else if (format_type == 1) {
-        archive_write_set_format_7zip(a);
+        if ((r = archive_write_set_format_7zip(a)) != ARCHIVE_OK) goto write_init_error;
         if (compress_level == 0) {
             archive_write_set_options(a, "7zip:compression-level=0");
         } else if (compress_level == 2) {
@@ -347,18 +377,18 @@ int archive_create_custom_format(const char *archive_path, const char **files, i
             archive_write_set_options(a, "7zip:compression-level=6");
         }
     } else if (format_type == 2) {
-        archive_write_set_format_ustar(a);
+        if ((r = archive_write_set_format_ustar(a)) != ARCHIVE_OK) goto write_init_error;
     } else if (format_type == 3) {
-        archive_write_set_format_ustar(a);
-        archive_write_add_filter_gzip(a);
+        if ((r = archive_write_set_format_ustar(a)) != ARCHIVE_OK) goto write_init_error;
+        if ((r = archive_write_add_filter_gzip(a)) != ARCHIVE_OK) goto write_init_error;
         if (compress_level == 0) {
             archive_write_set_options(a, "gzip:compression-level=1");
         } else if (compress_level == 2) {
             archive_write_set_options(a, "gzip:compression-level=9");
         }
     } else if (format_type == 4) {
-        archive_write_set_format_ustar(a);
-        archive_write_add_filter_bzip2(a);
+        if ((r = archive_write_set_format_ustar(a)) != ARCHIVE_OK) goto write_init_error;
+        if ((r = archive_write_add_filter_bzip2(a)) != ARCHIVE_OK) goto write_init_error;
         if (compress_level == 0) {
             archive_write_set_options(a, "bzip2:compression-level=1");
         } else if (compress_level == 2) {
@@ -369,7 +399,7 @@ int archive_create_custom_format(const char *archive_path, const char **files, i
         return -2;
     }
 
-    if (archive_write_open_filename(a, archive_path) != ARCHIVE_OK) {
+    if ((r = archive_write_open_filename(a, archive_path)) != ARCHIVE_OK) {
         archive_write_free(a);
         return -1;
     }
@@ -384,6 +414,10 @@ int archive_create_custom_format(const char *archive_path, const char **files, i
         }
         
         entry = archive_entry_new();
+        if (!entry) {
+            r = -4;
+            goto write_loop_error;
+        }
         archive_entry_set_pathname(entry, filename);
         
         SceIoStat stat;
@@ -396,12 +430,19 @@ int archive_create_custom_format(const char *archive_path, const char **files, i
         archive_entry_set_filetype(entry, AE_IFREG);
         archive_entry_set_perm(entry, 0644);
         
-        archive_write_header(a, entry);
+        if ((r = archive_write_header(a, entry)) != ARCHIVE_OK) {
+            archive_entry_free(entry);
+            goto write_loop_error;
+        }
         
         fd = sceIoOpen(filepath, SCE_O_RDONLY, 0);
         if (fd >= 0) {
             while ((len = sceIoRead(fd, buff, sizeof(buff))) > 0) {
-                archive_write_data(a, buff, len);
+                if ((r = archive_write_data(a, buff, len)) < 0) {
+                    sceIoClose(fd);
+                    archive_entry_free(entry);
+                    goto write_loop_error;
+                }
                 worker_processed_bytes += len;
             }
             sceIoClose(fd);
@@ -413,6 +454,16 @@ int archive_create_custom_format(const char *archive_path, const char **files, i
     archive_write_close(a);
     archive_write_free(a);
     return 0;
+
+write_init_error:
+    archive_write_free(a);
+    return r;
+
+write_loop_error:
+    archive_write_close(a);
+    archive_write_free(a);
+    sceIoRemove(archive_path);
+    return r;
 }
 
 int zip_create(const char *zip_path, const char **files, int file_count) {
