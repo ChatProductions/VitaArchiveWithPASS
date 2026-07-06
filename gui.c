@@ -819,17 +819,17 @@ void draw_worker_stats(int panel_y) {
     LanguageCode curr_lang = language_get_current(&lang);
     char stats_text[128];
     if (curr_lang == LANG_IT) {
-        snprintf(stats_text, sizeof(stats_text), "Velocita': %s | Rimanente: %s", speed_str, eta_str);
+        snprintf(stats_text, sizeof(stats_text), "Velocita': %s", speed_str);
     } else if (curr_lang == LANG_ES) {
-        snprintf(stats_text, sizeof(stats_text), "Velocidad: %s | Restante: %s", speed_str, eta_str);
+        snprintf(stats_text, sizeof(stats_text), "Velocidad: %s", speed_str);
     } else if (curr_lang == LANG_FR) {
-        snprintf(stats_text, sizeof(stats_text), "Vitesse: %s | Restant: %s", speed_str, eta_str);
+        snprintf(stats_text, sizeof(stats_text), "Vitesse: %s", speed_str);
     } else if (curr_lang == LANG_DE) {
-        snprintf(stats_text, sizeof(stats_text), "Geschwindigkeit: %s | Restzeit: %s", speed_str, eta_str);
+        snprintf(stats_text, sizeof(stats_text), "Geschwindigkeit: %s", speed_str);
     } else if (curr_lang == LANG_JPN) {
-        snprintf(stats_text, sizeof(stats_text), "速度: %s | 残り時間: %s", speed_str, eta_str);
+        snprintf(stats_text, sizeof(stats_text), "速度: %s", speed_str);
     } else {
-        snprintf(stats_text, sizeof(stats_text), "Speed: %s | Remaining: %s", speed_str, eta_str);
+        snprintf(stats_text, sizeof(stats_text), "Speed: %s", speed_str);
     }
     
     vita2d_pgf_draw_textf(font, 120, panel_y + 140, RGBA8(139, 148, 158, 255), 0.85f, "%s", stats_text);
@@ -1447,6 +1447,52 @@ void draw_usb_error_dialog() {
     
     const char *err_actions[] = {o_str};
     draw_footer(err_actions, 1);
+}
+
+void draw_install_launch_confirm() {
+    draw_browser();
+    vita2d_draw_rectangle(0, 0, 960, 544, RGBA8(0, 0, 0, 100));
+    
+    int menu_w = 420;
+    int menu_h = 160;
+    int menu_x = (960 - menu_w) / 2;
+    int menu_y = (544 - menu_h) / 2;
+    vita2d_draw_rectangle(menu_x, menu_y, menu_w, menu_h, RGBA8(22, 27, 34, 245));
+    vita2d_draw_rectangle(menu_x, menu_y, menu_w, 2, RGBA8(46, 204, 113, 255)); 
+    
+    LanguageCode curr_lang = language_get_current(&lang);
+    const char *title = 
+        (curr_lang == LANG_IT) ? "Installazione Completata" :
+        (curr_lang == LANG_ES) ? "Instalación Completada" :
+        (curr_lang == LANG_FR) ? "Installation Complétée" :
+        (curr_lang == LANG_DE) ? "Installation Abgeschlossen" :
+        (curr_lang == LANG_JPN) ? "インストール完了" :
+        "Installation Complete";
+        
+    const char *msg =
+        (curr_lang == LANG_IT) ? "Avviare l'applicazione adesso?" :
+        (curr_lang == LANG_ES) ? "¿Iniciar la aplicación ahora?" :
+        (curr_lang == LANG_FR) ? "Lancer l'application maintenant?" :
+        (curr_lang == LANG_DE) ? "Anwendung jetzt starten?" :
+        (curr_lang == LANG_JPN) ? "今すぐアプリを起動しますか？" :
+        "Launch application now?";
+        
+    vita2d_pgf_draw_textf(font, menu_x + 20, menu_y + 30, RGBA8(46, 204, 113, 255), 1.0f, "%s", title);
+    vita2d_draw_rectangle(menu_x + 10, menu_y + 42, menu_w - 20, 1, RGBA8(48, 54, 61, 255));
+    
+    int text_w = vita2d_pgf_text_width(font, 0.85f, msg);
+    int text_x = menu_x + (menu_w - text_w) / 2;
+    int text_y = menu_y + 95;
+    vita2d_pgf_draw_textf(font, text_x, text_y, RGBA8(201, 209, 217, 255), 0.85f, "%s", msg);
+    
+    char x_str[64], o_str[64];
+    const char *yes_label = (curr_lang == LANG_IT) ? "Sì" : (curr_lang == LANG_ES) ? "Sí" : (curr_lang == LANG_FR) ? "Oui" : (curr_lang == LANG_DE) ? "Ja" : (curr_lang == LANG_JPN) ? "はい" : "Yes";
+    const char *no_label = (curr_lang == LANG_IT) ? "No" : (curr_lang == LANG_ES) ? "No" : (curr_lang == LANG_FR) ? "Non" : (curr_lang == LANG_DE) ? "Nein" : (curr_lang == LANG_JPN) ? "いいえ" : "No";
+    snprintf(x_str, sizeof(x_str), "X: %s", yes_label);
+    snprintf(o_str, sizeof(o_str), "O: %s", no_label);
+    
+    const char *launch_actions[] = {x_str, o_str};
+    draw_footer(launch_actions, 2);
 }
 
 void draw_settings() {

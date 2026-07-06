@@ -180,6 +180,7 @@ int archive_actions_selected = 0;
 int connection_select_idx = 0;
 int usb_device_select_idx = 0;
 char usb_error_message[256] = {0};
+char installed_title_id[16] = {0};
 
 volatile uint64_t worker_processed_bytes = 0;
 volatile uint64_t worker_total_bytes = 0;
@@ -1094,7 +1095,6 @@ int main() {
                     thread_started = 0;
                     install_success = (worker_result == 0);
                     extract_progress = 100;
-                    install_done_frames = 90;
                     LanguageCode cl = language_get_current(&lang);
                     if (install_success) {
                         const char *ok =
@@ -1104,6 +1104,7 @@ int main() {
                             (cl == LANG_DE) ? "VPK erfolgreich installiert!" :
                             "VPK installed successfully!";
                         show_toast(ok, RGBA8(46, 204, 113, 255));
+                        current_mode = MODE_INSTALL_LAUNCH_CONFIRM;
                     } else {
                         const char *err =
                             (cl == LANG_IT) ? "Installazione VPK fallita" :
@@ -1112,6 +1113,7 @@ int main() {
                             (cl == LANG_DE) ? "VPK-Installation fehlgeschlagen" :
                             "VPK installation failed";
                         show_toast(err, RGBA8(231, 76, 60, 255));
+                        install_done_frames = 90;
                     }
                 } else if (install_done_frames > 0) {
                     install_done_frames--;
@@ -1988,6 +1990,23 @@ int main() {
                     current_mode = MODE_USB_DEVICE_SELECT;
                 }
                 break;
+
+            case MODE_INSTALL_LAUNCH_CONFIRM:
+                if (pressed & SCE_CTRL_CROSS) {
+                    char uri[128];
+                    snprintf(uri, sizeof(uri), "psgm:play?titleid=%s", installed_title_id);
+                    sceAppMgrLaunchAppByUri(0x20000, uri);
+                    sceKernelExitProcess(0);
+                } else if (pressed & SCE_CTRL_CIRCLE) {
+                    if (archive_stack_depth > 0) {
+                        current_mode = MODE_ARCHIVE_VIEW;
+                    } else {
+                        archive_close_custom(&archive_info);
+                        current_mode = MODE_BROWSER;
+                        filebrowser_refresh(&browser);
+                    }
+                }
+                break;
         }
         
         vita2d_start_drawing();
@@ -2064,6 +2083,9 @@ int main() {
                 break;
             case MODE_USB_ERROR:
                 draw_usb_error_dialog();
+                break;
+            case MODE_INSTALL_LAUNCH_CONFIRM:
+                draw_install_launch_confirm();
                 break;
         }
         

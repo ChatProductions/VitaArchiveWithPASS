@@ -335,6 +335,8 @@ static int make_head(const char *path) {
     if (get_sfo_string(tmp_path, "TITLE_ID", titleid, sizeof(titleid)) < 0) {
         return -1;
     }
+    strncpy(installed_title_id, titleid, sizeof(installed_title_id) - 1);
+    installed_title_id[sizeof(installed_title_id) - 1] = '\0';
 
     char contentid[48] = {0};
     get_sfo_string(tmp_path, "CONTENT_ID", contentid, sizeof(contentid));

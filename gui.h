@@ -47,5 +47,6 @@ void draw_usb_connection_screen();
 void draw_connection_select();
 void draw_usb_device_select();
 void draw_usb_error_dialog();
+void draw_install_launch_confirm();
 
 #endif

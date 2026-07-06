@@ -243,7 +243,7 @@ int zip_extract_all(const char *dest, ArchiveInfo *info, int *progress) {
         }
 
         count++;
-        // Usiamo il conteggio dei file come fallback SOLO se la dimensione totale in byte è zero
+        
         if (progress && info->total_size == 0 && info->file_count > 0 && progress_range > 0) {
             int calc = start_progress + (count * progress_range) / info->file_count;
             if (calc > target_progress) calc = target_progress;

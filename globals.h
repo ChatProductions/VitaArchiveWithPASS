@@ -40,10 +40,12 @@ typedef enum {
     MODE_USB_CONNECTION,
     MODE_CONNECTION_SELECT,
     MODE_USB_DEVICE_SELECT,
-    MODE_USB_ERROR
+    MODE_USB_ERROR,
+    MODE_INSTALL_LAUNCH_CONFIRM
 } AppMode;
 
 extern char usb_error_message[256];
+extern char installed_title_id[16];
 
 typedef enum {
     INSTALL_MODE_VPK,
