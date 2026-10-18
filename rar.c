@@ -55,6 +55,37 @@ static int rar_result(int code) {
     return VA_RAR_ERROR;
 }
 
+/* Convert Vita IME UTF-8 passwords to UnRAR wchar_t code points.
+   Byte-by-byte widening breaks RAR header passwords containing accents. */
+static int rar_password_to_wide(const char *src, wchar_t *dest, size_t capacity) {
+    size_t j = 0;
+    const unsigned char *p = (const unsigned char *)src;
+    if (!src || !dest || !capacity) return -1;
+    while (*p) {
+        uint32_t cp;
+        unsigned int count;
+        if (*p < 0x80) { cp = *p; count = 1; }
+        else if ((*p & 0xe0) == 0xc0) { cp = *p & 0x1f; count = 2; }
+        else if ((*p & 0xf0) == 0xe0) { cp = *p & 0x0f; count = 3; }
+        else if ((*p & 0xf8) == 0xf0) { cp = *p & 0x07; count = 4; }
+        else return -1;
+        for (unsigned int k = 1; k < count; k++) {
+            if (!p[k] || (p[k] & 0xc0) != 0x80) return -1;
+            cp = (cp << 6) | (p[k] & 0x3f);
+        }
+        if ((count == 2 && cp < 0x80) ||
+            (count == 3 && cp < 0x800) ||
+            (count == 4 && cp < 0x10000) ||
+            (cp >= 0xd800 && cp <= 0xdfff) || cp > 0x10ffff)
+            return -1;
+        if (j + 1 >= capacity) return -1;
+        dest[j++] = (wchar_t)cp;
+        p += count;
+    }
+    dest[j] = 0;
+    return (int)j;
+}
+
 static int CALLBACK vita_rar_callback(UINT msg, LPARAM user, LPARAM p1, LPARAM p2) {
     ArchiveInfo *info = (ArchiveInfo *)(uintptr_t)user;
     if (!info) return -1;
@@ -68,14 +99,10 @@ static int CALLBACK vita_rar_callback(UINT msg, LPARAM user, LPARAM p1, LPARAM p
     if (msg == UCM_NEEDPASSWORDW) {
         /* The Vita IME normally supplies ASCII or UTF-8. UnRAR's wide
            callback is needed for archives with encrypted file headers. */
-        size_t length = strlen(info->password);
-        if (!length || p2 <= 0 || length >= (size_t)p2) return -1;
+        if (!info->password[0] || p2 <= 0) return -1;
         wchar_t *dst = (wchar_t *)(uintptr_t)p1;
-        size_t i;
-        for (i = 0; i < length; i++)
-            dst[i] = (unsigned char)info->password[i];
-        dst[length] = 0;
-        return 1;
+        return rar_password_to_wide(info->password, dst, (size_t)p2) >= 0
+            ? 1 : -1;
     }
     if (msg == UCM_PROCESSDATA) {
         if (info->cancel_flag) return -1;
