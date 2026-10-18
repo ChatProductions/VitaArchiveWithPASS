@@ -278,6 +278,11 @@ static int process_rar(const char *dest, ArchiveInfo *info, int file_index,
             status = VA_RAR_UNSAFE_PATH;
             break;
         }
+        /* Never materialize archived symlinks, junctions, or redirections. */
+        if (hdr.RedirType != 0) {
+            status = VA_RAR_UNSAFE_PATH;
+            break;
+        }
         int selected = file_index < 0 || file_index == index;
         if (!selected) {
             code = RARProcessFile(arc, RAR_SKIP, NULL, NULL);
