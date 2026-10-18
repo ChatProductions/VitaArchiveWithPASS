@@ -782,7 +782,10 @@ int main() {
                                     strncpy(archive_stack[0], selected, MAX_PATH - 1);
                                     archive_stack[0][MAX_PATH - 1] = '\0';
                                 } else {
-                                    show_toast(language_get(&lang, STR_CANNOT_OPEN), RGBA8(231, 76, 60, 255));
+                                    if (is_rar_file(selected))
+                                        show_toast("RAR failed: see VitaArchiveWithPASS/rar_debug.log", RGBA8(231, 76, 60, 255));
+                                    else
+                                        show_toast(language_get(&lang, STR_CANNOT_OPEN), RGBA8(231, 76, 60, 255));
                                 }
                             }
                         }
