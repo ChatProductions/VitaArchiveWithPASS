@@ -91,12 +91,14 @@ static int CALLBACK vita_rar_callback(UINT msg, LPARAM user, LPARAM p1, LPARAM p
     if (!info) return -1;
 
     if (msg == UCM_NEEDPASSWORD) {
+        rar_trace("callback-pass8", 0, info, (unsigned int)p2);
         size_t length = strlen(info->password);
         if (!length || p2 <= 0 || length >= (size_t)p2) return -1;
         memcpy((void *)(uintptr_t)p1, info->password, length + 1);
         return 1;
     }
     if (msg == UCM_NEEDPASSWORDW) {
+        rar_trace("callback-pass-wide", 0, info, (unsigned int)p2);
         /* The Vita IME normally supplies ASCII or UTF-8. UnRAR's wide
            callback is needed for archives with encrypted file headers. */
         if (!info->password[0] || p2 <= 0) return -1;
@@ -110,6 +112,7 @@ static int CALLBACK vita_rar_callback(UINT msg, LPARAM user, LPARAM p1, LPARAM p
     }
     if (msg == UCM_CHANGEVOLUME || msg == UCM_CHANGEVOLUMEW ||
         msg == UCM_LARGEDICT) {
+        rar_trace("unsupported-callback", (int)msg, info, 0);
         /* No interactive volume chooser or large-dictionary override. */
         return -1;
     }
