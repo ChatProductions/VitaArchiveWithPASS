@@ -31,7 +31,7 @@ jobs:
         with:
           tag_name: v1.06
           name: VitaArchiveWithPASS 1.06
-          target_commitish: \${{ github.sha }}
+          target_commitish: ${{ github.sha }}
           body_path: README.md
           files: VitaArchiveWithPASS-1.06.vpk
           fail_on_unmatched_files: true
