@@ -1,0 +1,38 @@
+name: Publish VitaArchiveWithPASS 1.06
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish:
+    # One-time release from the specifically named publication merge.
+    if: startsWith(github.event.head_commit.message, 'Publish VitaArchiveWithPASS 1.06')
+    runs-on: ubuntu-latest
+    container:
+      image: vitasdk/vitasdk:2026.08
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify VitaSDK UnRAR support
+        run: |
+          test -f "$VITASDK/arm-vita-eabi/include/unrar.h"
+          test -f "$VITASDK/arm-vita-eabi/lib/libunrar.a"
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Compile and package
+        run: cmake --build build --parallel 2
+      - name: Stage versioned VPK
+        run: cp build/VitaArchive.vpk VitaArchiveWithPASS-1.06.vpk
+      - name: Publish GitHub release with full project description
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.06
+          name: VitaArchiveWithPASS 1.06
+          target_commitish: \${{ github.sha }}
+          body_path: README.md
+          files: VitaArchiveWithPASS-1.06.vpk
+          fail_on_unmatched_files: true
+          make_latest: true
