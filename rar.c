@@ -274,7 +274,7 @@ static int process_rar(const char *dest, ArchiveInfo *info, int file_index,
         /* The index must correspond to the list displayed in the UI. */
         if (index >= info->file_count) break;
         char normalized[256];
-        if (safe_member_name(hdr.FileName, normalized, sizeof(normalized)) < 0) {
+        if (safe_member_name(hdr.FileName, normalized, sizeof(normalized), (hdr.Flags & RHDF_DIRECTORY) != 0) < 0) {
             status = VA_RAR_UNSAFE_PATH;
             break;
         }
