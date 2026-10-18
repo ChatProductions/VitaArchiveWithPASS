@@ -221,6 +221,7 @@ int rar_list_files(ArchiveInfo *info) {
     info->total_size = 0;
     info->total_compressed_size = 0;
     info->is_encrypted = 0;
+    info->is_truncated = 0;
     memset(info->files, 0, sizeof(info->files));
 
     int status;
@@ -249,6 +250,7 @@ int rar_list_files(ArchiveInfo *info) {
             goto fail;
         }
         if (info->cancel_flag) {
+            rar_trace("list-cancelled", VA_RAR_ERROR, info, (unsigned int)count);
             status = VA_RAR_ERROR;
             goto fail;
         }
@@ -261,8 +263,11 @@ int rar_list_files(ArchiveInfo *info) {
             }
         }
         if (count == MAX_ARCHIVE_FILES) {
-            status = VA_RAR_ERROR;
-            goto fail;
+            /* The UI can only hold MAX_ARCHIVE_FILES. Show the first page,
+               but let Extract All process every entry. Never fail opening. */
+            info->is_truncated = 1;
+            rar_trace("list-truncated", 0, info, (unsigned int)count);
+            break;
         }
 
         char normalized[256];
@@ -296,7 +301,10 @@ int rar_list_files(ArchiveInfo *info) {
             status = rar_result(code);
             goto fail;
         }
+        if (count == 1 || count % 128 == 0)
+            rar_trace("list-progress", 0, info, (unsigned int)count);
     }
+    rar_trace("list-complete", 0, info, (unsigned int)count);
     RARCloseArchive(arc);
     info->file_count = count;
     return count;
@@ -332,7 +340,9 @@ static int process_rar(const char *dest, ArchiveInfo *info, int file_index,
             break;
         }
         /* The index must correspond to the list displayed in the UI. */
-        if (index >= info->file_count) break;
+        /* Single-file extraction is limited to visible entries; Extract All
+           and integrity testing continue past the UI's 512-file page. */
+        if (file_index >= 0 && index >= info->file_count) break;
         char normalized[256];
         if (safe_member_name(hdr.FileName, normalized, sizeof(normalized), (hdr.Flags & RHDF_DIRECTORY) != 0) < 0) {
             status = VA_RAR_UNSAFE_PATH;
@@ -370,10 +380,13 @@ static int process_rar(const char *dest, ArchiveInfo *info, int file_index,
             break;
         }
         index++;
-        if (progress && info->file_count)
-            *progress = (index * 100) / info->file_count;
+        if (progress && info->file_count) {
+            int percent = (int)((uint64_t)index * 100 / info->file_count);
+            *progress = percent > 99 ? 99 : percent;
+        }
         if (file_index >= 0 && file_index == index - 1) break;
     }
+    if (progress && status == 0) *progress = 100;
     RARCloseArchive(arc);
     return status;
 }
