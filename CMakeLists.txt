@@ -59,7 +59,7 @@ target_link_libraries(${PROJECT_NAME}
   ScePromoterUtil_stub
   ScePower_stub
   SceNet_stub
-  SceNetctl_stub
+  SceNetCtl_stub
   SceSysmodule_stub
   SceIme_stub
   ScePgf_stub
