@@ -23,6 +23,25 @@
 extern volatile uint64_t worker_processed_bytes;
 int sceIoMkdir(const char *path, int mode);
 
+/*
+ * Diagnostic file intentionally never records archive names or passwords.
+ * The small append-only trace helps distinguish invalid passwords from Vita
+ * libunrar path/open failures and malformed archives.
+ */
+static unsigned int rar_attempt = 0;
+static void rar_trace(const char *stage, int code, const ArchiveInfo *info,
+                      unsigned int detail) {
+    sceIoMkdir("ux0:data/VitaArchiveWithPASS", 0777);
+    FILE *out = fopen("ux0:data/VitaArchiveWithPASS/rar_debug.log", "a");
+    if (!out) return;
+    fprintf(out, "attempt=%u stage=%s rar_code=%d pass_supplied=%d "
+                 "encrypted=%d detail=%u\n",
+            rar_attempt, stage, code,
+            info && info->password[0] != '\0',
+            info ? info->is_encrypted : 0, detail);
+    fclose(out);
+}
+
 /* Keep VitaArchive's existing negative result convention. */
 #define VA_RAR_ERROR (-1)
 #define VA_RAR_DIRECTORY (-2)
@@ -80,10 +99,12 @@ static HANDLE open_unrar(ArchiveInfo *info, int mode, int *result, unsigned int 
 
     HANDLE archive = RAROpenArchiveEx(&data);
     if (!archive || data.OpenResult != ERAR_SUCCESS) {
+        rar_trace("open-failed", (int)data.OpenResult, info, (unsigned int)mode);
         *result = rar_result((int)data.OpenResult);
         if (archive) RARCloseArchive(archive);
         return NULL;
     }
+    rar_trace("open-ok", 0, info, data.Flags);
     if (flags) *flags = data.Flags;
     if (info->password[0]) RARSetPassword(archive, info->password);
     RARSetCallback(archive, vita_rar_callback, (LPARAM)(uintptr_t)info);
@@ -154,7 +175,11 @@ int rar_open(const char *rar_path, ArchiveInfo *info) {
     strncpy(info->archive_path, rar_path, sizeof(info->archive_path) - 1);
     memcpy(info->password, saved_password, sizeof(saved_password));
 
+    rar_attempt++;
+    rar_trace("begin", 0, info, 0);
     int count = rar_list_files(info);
+    if (count < 0) rar_trace("listing-failed", count, info, 0);
+    else rar_trace("listing-ok", 0, info, (unsigned int)count);
     if (count < 0) return count;
     info->is_open = 1;
     return count;
@@ -187,6 +212,8 @@ int rar_list_files(ArchiveInfo *info) {
         memset(&hdr, 0, sizeof(hdr));
         code = RARReadHeaderEx(arc, &hdr);
         if (code == ERAR_END_ARCHIVE) break;
+        if (code != ERAR_SUCCESS || count == 0)
+            rar_trace("list-header", code, info, (unsigned int)count);
         if (code != ERAR_SUCCESS) {
             status = rar_result(code);
             goto fail;
@@ -197,6 +224,7 @@ int rar_list_files(ArchiveInfo *info) {
         }
         if (hdr.Flags & RHDF_ENCRYPTED) {
             info->is_encrypted = 1;
+            if (count == 0) rar_trace("encrypted-entry", 0, info, hdr.Flags);
             if (!info->password[0]) {
                 status = VA_RAR_PASSWORD;
                 goto fail;
@@ -209,6 +237,7 @@ int rar_list_files(ArchiveInfo *info) {
 
         char normalized[256];
         if (safe_member_name(hdr.FileName, normalized, sizeof(normalized), (hdr.Flags & RHDF_DIRECTORY) != 0) < 0) {
+            rar_trace("unsafe-entry-path", VA_RAR_UNSAFE_PATH, info, (unsigned int)count);
             status = VA_RAR_UNSAFE_PATH;
             goto fail;
         }
@@ -233,6 +262,7 @@ int rar_list_files(ArchiveInfo *info) {
 
         code = RARProcessFile(arc, RAR_SKIP, NULL, NULL);
         if (code != ERAR_SUCCESS) {
+            rar_trace("skip-failed", code, info, (unsigned int)count);
             status = rar_result(code);
             goto fail;
         }
