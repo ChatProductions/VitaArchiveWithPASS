@@ -17,6 +17,18 @@ Born as a focused alternative for browsing and extracting archives, VitaArchive 
 * **VPK Installation**: Automatic detection and direct installation of `.vpk` packages.
 * **Smart Install**: Detects the presence of `eboot.bin` files inside common ZIP archives to install them on the fly as homebrew applications.
 
+
+### VitaArchiveWithPASS v1.06 — Proper Password-Protected RAR Support
+* **Native UnRAR extraction**: Replaces the original RAR extraction backend with VitaSDK's `libunrar`, allowing password-protected RAR3 and RAR5 archives to be opened and extracted directly on the PS Vita.
+* **Encrypted RAR headers and files**: Handles password prompts, encrypted archive entries, and password retries without requiring an application restart. Tested successfully with a password-protected RAR on real PS Vita hardware.
+* **Folder navigation inside archives**: Browse folders and subfolders, including implicit folders built from archived file paths, rather than a flat list of full filenames.
+* **Selective or full extraction**: Extract individual files or entire RAR archives while preserving directory structure.
+* **Large archive note**: The browser displays at most 512 file entries, but **Extract All processes the complete archive**, including entries outside the displayed portion.
+* **Troubleshooting log**: RAR diagnostics are written to `ux0:data/VitaArchiveWithPASS/rar_debug.log`; passwords are not included in the log.
+* **Separate installation**: Installs as `VTAPASS01`, alongside the original VitaArchive. No additional taiHEN or kernel plugin is required.
+
+This WithPASS version is based on **theheroGAC's VitaArchive**. Thanks to its original author and the VitaSDK contributors. UnRAR is a third-party library distributed under its own license.
+
 ### Advanced Tools (New!)
 * **Asynchronous Hash Calculation**: Calculate MD5 and SHA-256 codes in the background without freezing the GUI. Saves results to `ux0:/data/VitaArchive/hash_report.txt`.
 * **Hex Viewer**: Inspect files byte-by-byte with an aligned ASCII column. Reads in 240-byte pages to guarantee instant speed even on multi-Gigabyte files.
