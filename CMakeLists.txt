@@ -13,9 +13,9 @@ project(VitaArchive VERSION 1.0 LANGUAGES C)
 
 include("${VITASDK}/share/vita.cmake" REQUIRED)
 
-set(VITA_APP_NAME "VitaArchive")
-set(VITA_TITLEID  "VITARCH01")
-set(VITA_VERSION  "01.00")
+set(VITA_APP_NAME "VitaArchive WithPASS")
+set(VITA_TITLEID  "VTAPASS01")
+set(VITA_VERSION  "01.06")
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q -Wall -fno-lto -Wl,-z,noexecstack")
 set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS} -s CATEGORY=gdb")
@@ -36,6 +36,7 @@ add_executable(${PROJECT_NAME}
   vpk.c
   filebrowser.c
   rar.c
+  archive_folder.c
   archive7z.c
   language.c
   psarc.c
@@ -59,7 +60,7 @@ target_link_libraries(${PROJECT_NAME}
   ScePromoterUtil_stub
   ScePower_stub
   SceNet_stub
-  SceNetctl_stub
+  SceNetCtl_stub
   SceSysmodule_stub
   SceIme_stub
   ScePgf_stub
@@ -68,11 +69,13 @@ target_link_libraries(${PROJECT_NAME}
   SceMtpIfDriver_stub
   taihen_stub
   archive
+  zstd
   ftpvita
   freetype
   png
   lzma
   unrar
+  stdc++
   bz2
   z
   m

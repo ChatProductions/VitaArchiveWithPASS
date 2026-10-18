@@ -27,6 +27,7 @@ typedef struct {
     char password[128];
     char archive_path[512];
     int is_encrypted;
+    int is_truncated; /* RAR browser only: more entries than UI capacity */
 } ArchiveInfo;
 
 int archive_test_integrity(ArchiveInfo *info, int *progress);

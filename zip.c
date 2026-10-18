@@ -15,6 +15,7 @@
 #include <archive_entry.h>
 
 #include "zip.h"
+#include "rar.h"
 
 int sceIoMkdir(const char *path, int mode);
 extern volatile uint64_t worker_processed_bytes;
@@ -493,6 +494,8 @@ void zip_close(ArchiveInfo *info) {
 }
 
 int archive_test_integrity(ArchiveInfo *info, int *progress) {
+    if (info && is_rar_file(info->archive_path))
+        return rar_test_integrity(info, progress);
     if (!info || info->archive_path[0] == '\0') {
         return -1;
     }
