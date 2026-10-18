@@ -92,7 +92,7 @@ static HANDLE open_unrar(ArchiveInfo *info, int mode, int *result, unsigned int 
 
 /* Reject untrusted archive paths that could escape the destination.
    Normalize DOS separators because RAR filenames can contain them. */
-static int safe_member_name(const char *name, char *out, size_t capacity) {
+static int safe_member_name(const char *name, char *out, size_t capacity, int is_directory) {
     size_t length, start = 0, i;
     if (!name || !name[0] || name[0] == '/' || name[0] == '\\') return -1;
     length = strlen(name);
@@ -103,6 +103,8 @@ static int safe_member_name(const char *name, char *out, size_t capacity) {
         if (c == ':' || (unsigned char)c < 32) return -1;
         out[i] = c;
     }
+    if (is_directory && length && out[length - 1] == '/') length--;
+    if (!length) return -1;
     out[length] = '\0';
     for (i = 0; i <= length; i++) {
         if (i == length || out[i] == '/') {
@@ -205,7 +207,7 @@ int rar_list_files(ArchiveInfo *info) {
         }
 
         char normalized[256];
-        if (safe_member_name(hdr.FileName, normalized, sizeof(normalized)) < 0) {
+        if (safe_member_name(hdr.FileName, normalized, sizeof(normalized), (hdr.Flags & RHDF_DIRECTORY) != 0) < 0) {
             status = VA_RAR_UNSAFE_PATH;
             goto fail;
         }
