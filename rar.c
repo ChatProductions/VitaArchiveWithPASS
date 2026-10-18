@@ -21,6 +21,7 @@
 #include "zip.h"
 
 extern volatile uint64_t worker_processed_bytes;
+int sceIoMkdir(const char *path, int mode);
 
 /* Keep VitaArchive's existing negative result convention. */
 #define VA_RAR_ERROR (-1)
