@@ -15,7 +15,7 @@ include("${VITASDK}/share/vita.cmake" REQUIRED)
 
 set(VITA_APP_NAME "VitaArchive WithPASS")
 set(VITA_TITLEID  "VTAPASS01")
-set(VITA_VERSION  "01.05")
+set(VITA_VERSION  "01.06")
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q -Wall -fno-lto -Wl,-z,noexecstack")
 set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS} -s CATEGORY=gdb")
@@ -36,6 +36,7 @@ add_executable(${PROJECT_NAME}
   vpk.c
   filebrowser.c
   rar.c
+  archive_folder.c
   archive7z.c
   language.c
   psarc.c
