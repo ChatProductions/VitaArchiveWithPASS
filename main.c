@@ -781,6 +781,8 @@ int main() {
                                     archive_stack_depth = 1;
                                     strncpy(archive_stack[0], selected, MAX_PATH - 1);
                                     archive_stack[0][MAX_PATH - 1] = '\0';
+                                    if (archive_info.is_truncated)
+                                        show_toast("RAR: first 512 entries shown. Extract All includes all files.", RGBA8(255, 190, 50, 255));
                                 } else {
                                     if (is_rar_file(selected))
                                         show_toast("RAR failed: see VitaArchiveWithPASS/rar_debug.log", RGBA8(231, 76, 60, 255));
