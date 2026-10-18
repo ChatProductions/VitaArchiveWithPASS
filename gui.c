@@ -18,6 +18,7 @@
 #include <vita2d.h>
 #include "globals.h"
 #include "gui.h"
+#include "archive_folder.h"
 #include "clipboard.h"
 #include "vpk.h"
 #include "ftp.h"
@@ -644,80 +645,93 @@ void draw_dest_browser() {
 
 void draw_archive_view() {
     vita2d_draw_rectangle(0, 0, 960, 50, RGBA8(21, 26, 33, 255));
-    vita2d_pgf_draw_textf(font, 10, 30, RGBA8(240, 246, 252, 255), 1.0f, "%s - %s", 
-        language_get(&lang, STR_APP_TITLE), language_get(&lang, STR_ARCHIVE_CONTENTS));
-    
+    vita2d_pgf_draw_textf(font, 10, 24, RGBA8(240, 246, 252, 255), 0.9f,
+        "%s - %s", language_get(&lang, STR_APP_TITLE),
+        language_get(&lang, STR_ARCHIVE_CONTENTS));
+    vita2d_pgf_draw_textf(font, 10, 43, RGBA8(139, 148, 158, 255), 0.65f,
+        "/%s", archive_folder_prefix);
+
     char size_buf[32];
     format_size(size_buf, archive_info.total_size);
     vita2d_draw_rectangle(0, 50, 960, 30, RGBA8(28, 33, 40, 255));
-    char info_text[128];
-    snprintf(info_text, sizeof(info_text), "%s: %d | %s: %s", 
+    char info_text[160];
+    snprintf(info_text, sizeof(info_text),
+        "%s: %d | Items here: %d | %s: %s%s",
         language_get(&lang, STR_FILES), archive_info.file_count,
-        language_get(&lang, STR_SIZE), size_buf);
-    vita2d_pgf_draw_textf(font, 10, 70, RGBA8(201, 209, 217, 255), 0.8f, "%s", info_text);
-    
+        archive_folder_count, language_get(&lang, STR_SIZE), size_buf,
+        archive_info.is_truncated ? " | Listing limited to 512 entries" : "");
+    vita2d_pgf_draw_textf(font, 10, 70, RGBA8(201, 209, 217, 255), 0.75f, "%s", info_text);
+
     int header_y = 85;
     vita2d_draw_rectangle(0, header_y, 960, 25, RGBA8(33, 38, 45, 255));
-    vita2d_pgf_draw_textf(font, 10, header_y + 18, RGBA8(240, 246, 252, 255), 0.85f, "%s", language_get(&lang, STR_NAME));
-    vita2d_pgf_draw_textf(font, 500, header_y + 18, RGBA8(240, 246, 252, 255), 0.85f, "%s", language_get(&lang, STR_SIZE));
-    vita2d_pgf_draw_textf(font, 650, header_y + 18, RGBA8(240, 246, 252, 255), 0.85f, "%s", language_get(&lang, STR_COMPRESSED));
-    vita2d_pgf_draw_textf(font, 800, header_y + 18, RGBA8(240, 246, 252, 255), 0.85f, "%s", language_get(&lang, STR_TYPE));
+    vita2d_pgf_draw_textf(font, 10, header_y + 18, RGBA8(240, 246, 252, 255),
+                           0.85f, "%s", language_get(&lang, STR_NAME));
+    vita2d_pgf_draw_textf(font, 500, header_y + 18, RGBA8(240, 246, 252, 255),
+                           0.85f, "%s", language_get(&lang, STR_SIZE));
+    vita2d_pgf_draw_textf(font, 650, header_y + 18, RGBA8(240, 246, 252, 255),
+                           0.85f, "%s", language_get(&lang, STR_COMPRESSED));
+    vita2d_pgf_draw_textf(font, 800, header_y + 18, RGBA8(240, 246, 252, 255),
+                           0.85f, "%s", language_get(&lang, STR_TYPE));
+
     int start_y = 110;
     int line_height = 22;
     int visible_files = (510 - start_y) / line_height;
-    
-    for (int i = 0; i < archive_info.file_count && i < visible_files; i++) {
+
+    for (int i = 0; i < visible_files; i++) {
         int idx = archive_scroll + i;
-        if (idx >= archive_info.file_count) break;
-        
-        ArchiveFile *file = &archive_info.files[idx];
+        if (idx >= archive_folder_count) break;
+        ArchiveFolderItem *item = &archive_folder_items[idx];
+        int file_index = item->file_index;
         int y = start_y + 5 + (i * line_height);
-        
-        if (idx == archive_selected) {
-            vita2d_draw_rectangle(0, y, 960, line_height, RGBA8(31, 111, 235, 255));
-        } else if (i % 2 != 0) {
-            vita2d_draw_rectangle(0, y, 960, line_height, RGBA8(22, 27, 34, 255));
-        }
-        
+        if (idx == archive_selected)
+            vita2d_draw_rectangle(0, y, 960, line_height,
+                                  RGBA8(31, 111, 235, 255));
+        else if (i % 2 != 0)
+            vita2d_draw_rectangle(0, y, 960, line_height,
+                                  RGBA8(22, 27, 34, 255));
+
         const char *icon = NULL;
         uint32_t icon_color = 0;
-        get_file_visuals(file->filename, file->is_directory, &icon, &icon_color);
-        
-        int icon_x = 36;
-        int text_x = 86;
-        
+        get_file_visuals(item->name, item->is_directory, &icon, &icon_color);
+
         vita2d_draw_rectangle(10, y + 4, 14, 14, RGBA8(110, 118, 129, 255));
         vita2d_draw_rectangle(12, y + 6, 10, 10, RGBA8(13, 17, 23, 255));
-        if (archive_selection_mask[idx]) {
-            vita2d_draw_rectangle(12, y + 6, 10, 10, RGBA8(46, 204, 113, 255));
-        }
-        
-        vita2d_pgf_draw_textf(font, icon_x, y + 16, icon_color, 0.8f, "%s", icon);
-        
-        uint32_t text_color = (idx == archive_selected) ? RGBA8(255, 255, 255, 255) : RGBA8(201, 209, 217, 255);
-        vita2d_pgf_draw_textf(font, text_x, y + 16, text_color, 0.85f, "%s", file->filename);
-        
-        if (!file->is_directory) {
+        if (archive_folder_is_selected(idx, &archive_info, archive_selection_mask))
+            vita2d_draw_rectangle(12, y + 6, 10, 10,
+                                  RGBA8(46, 204, 113, 255));
+
+        vita2d_pgf_draw_textf(font, 36, y + 16, icon_color, 0.8f, "%s", icon);
+        uint32_t text_color = idx == archive_selected
+            ? RGBA8(255, 255, 255, 255) : RGBA8(201, 209, 217, 255);
+        vita2d_pgf_draw_textf(font, 86, y + 16, text_color,
+                              0.85f, "%s", item->name);
+
+        if (!item->is_directory && file_index >= 0) {
+            ArchiveFile *file = &archive_info.files[file_index];
             format_size(size_buf, file->uncompressed_size);
-            vita2d_pgf_draw_textf(font, 500, y + 16, RGBA8(139, 148, 158, 255), 0.8f, "%s", size_buf);
-            
+            vita2d_pgf_draw_textf(font, 500, y + 16,
+                                  RGBA8(139, 148, 158, 255), 0.8f, "%s", size_buf);
             format_size(size_buf, file->compressed_size);
-            vita2d_pgf_draw_textf(font, 650, y + 16, RGBA8(139, 148, 158, 255), 0.8f, "%s", size_buf);
+            vita2d_pgf_draw_textf(font, 650, y + 16,
+                                  RGBA8(139, 148, 158, 255), 0.8f, "%s", size_buf);
         }
-        
-        const char *type = get_file_type_label(file->filename, file->is_directory);
-        uint32_t type_color = (idx == archive_selected) ? RGBA8(255, 255, 255, 255) : icon_color;
+        const char *type = get_file_type_label(item->name, item->is_directory);
+        uint32_t type_color = idx == archive_selected
+            ? RGBA8(255, 255, 255, 255) : icon_color;
         vita2d_pgf_draw_textf(font, 800, y + 16, type_color, 0.8f, "%s", type);
     }
 
     char x_str[64], sq_str[64], o_str[64], tri_str[64], start_str[64], sel_str[64] = "";
-    int vpk_selected = archive_info.file_count > 0 &&
-        is_vpk_file(archive_info.files[archive_selected].filename);
-    int smart_install_available = !vpk_selected && archive_can_smart_install(&archive_info);
-    int can_preview = archive_info.file_count > 0 &&
-        is_viewable_text_file(archive_info.files[archive_selected].filename);
-    int is_nested_arch = archive_info.file_count > 0 &&
-        is_archive_file(archive_info.files[archive_selected].filename);
+    int selected_file_index = archive_folder_file_index(archive_selected);
+    int selected_is_folder = archive_folder_is_directory(archive_selected);
+    int vpk_selected = selected_file_index >= 0 &&
+        is_vpk_file(archive_info.files[selected_file_index].filename);
+    int smart_install_available = !vpk_selected && !selected_is_folder &&
+        archive_can_smart_install(&archive_info);
+    int can_preview = selected_file_index >= 0 &&
+        is_viewable_text_file(archive_info.files[selected_file_index].filename);
+    int is_nested_arch = selected_file_index >= 0 &&
+        is_archive_file(archive_info.files[selected_file_index].filename);
     
     LanguageCode curr_lang = language_get_current(&lang);
     const char *extract_sel_label = "Extract Selected";
@@ -727,7 +741,9 @@ void draw_archive_view() {
     else if (curr_lang == LANG_DE) extract_sel_label = "Auswahl entpacken";
     else if (curr_lang == LANG_JPN) extract_sel_label = "選択項目を展開";
     
-    if (vpk_selected) {
+    if (selected_is_folder) {
+        snprintf(x_str, sizeof(x_str), "X: Open Folder");
+    } else if (vpk_selected) {
         snprintf(x_str, sizeof(x_str), "X: %s", language_get(&lang, STR_PRESS_X_INSTALL_VPK));
     } else if (smart_install_available) {
         snprintf(x_str, sizeof(x_str), "X: %s", language_get(&lang, STR_SMART_INSTALL));
