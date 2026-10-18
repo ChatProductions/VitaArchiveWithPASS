@@ -115,6 +115,7 @@ static void utf16_to_utf8(uint8_t *dst, uint32_t dst_max_bytes, const uint16_t *
 #include "filebrowser.h"
 #include "language.h"
 #include "rar.h"
+#include "archive_folder.h"
 #include "archive7z.h"
 #include "vpk.h"
 #include "psarc.h"
@@ -781,6 +782,8 @@ int main() {
                                     archive_stack_depth = 1;
                                     strncpy(archive_stack[0], selected, MAX_PATH - 1);
                                     archive_stack[0][MAX_PATH - 1] = '\0';
+                                    memset(archive_selection_mask, 0, sizeof(archive_selection_mask));
+                                    archive_folder_reset(&archive_info, &archive_selected, &archive_scroll);
                                     if (archive_info.is_truncated)
                                         show_toast("RAR: first 512 entries shown. Extract All includes all files.", RGBA8(255, 190, 50, 255));
                                 } else {
@@ -822,38 +825,46 @@ int main() {
                 
             case MODE_ARCHIVE_VIEW:
                 {
-                int vpk_selected = archive_info.file_count > 0 &&
-                    is_vpk_file(archive_info.files[archive_selected].filename);
-                int smart_install_available = !vpk_selected && archive_can_smart_install(&archive_info);
+                int selected_file_index = archive_folder_file_index(archive_selected);
+                int selected_is_folder = archive_folder_is_directory(archive_selected);
+                int vpk_selected = selected_file_index >= 0 &&
+                    is_vpk_file(archive_info.files[selected_file_index].filename);
+                int smart_install_available = !vpk_selected && !selected_is_folder &&
+                    archive_can_smart_install(&archive_info);
                 if ((pressed | repeat_event) & SCE_CTRL_UP) {
                     if (archive_selected > 0) {
                         archive_selected--;
-                    } else if (archive_info.file_count > 0) {
-                        archive_selected = archive_info.file_count - 1;
+                    } else if (archive_folder_count > 0) {
+                        archive_selected = archive_folder_count - 1;
                     }
                 } else if ((pressed | repeat_event) & SCE_CTRL_DOWN) {
-                    if (archive_selected < archive_info.file_count - 1) {
+                    if (archive_selected < archive_folder_count - 1) {
                         archive_selected++;
                     } else {
                         archive_selected = 0;
                     }
                 } else if (pressed & SCE_CTRL_CROSS) {
-                    if (vpk_selected) {
+                    if (selected_is_folder) {
+                        archive_folder_enter(archive_selected, &archive_info,
+                                             &archive_selected, &archive_scroll);
+                    } else if (vpk_selected) {
                         current_mode = MODE_INSTALLING;
                         current_install_mode = INSTALL_MODE_VPK;
                         extract_progress = 0;
                     } else if (smart_install_available) {
                         current_mode = MODE_SMART_INSTALL_CONFIRM;
-                    } else {
+                    } else if (selected_file_index >= 0) {
                         extract_selected_only = 1;
-                        extract_file_index = archive_selected;
+                        extract_file_index = selected_file_index;
                         worker_args.mode = 1;
                         current_mode = MODE_DEST_BROWSER;
                         filebrowser_init(&browser, "ux0:/");
                         scroll_offset = 0;
                     }
                 } else if (pressed & SCE_CTRL_CIRCLE) {
-                    if (archive_stack_depth > 1) {
+                    if (archive_folder_up(&archive_info, &archive_selected, &archive_scroll)) {
+                        /* Back navigates folders before exiting the archive. */
+                    } else if (archive_stack_depth > 1) {
                         char current_nested_path[1024];
                         strncpy(current_nested_path, archive_stack[archive_stack_depth - 1], sizeof(current_nested_path) - 1);
                         archive_stack_depth--;
@@ -865,8 +876,8 @@ int main() {
                         int open_res = try_open_archive_with_password(parent_path, &archive_info);
                         
                         if (open_res >= 0) {
+                            archive_folder_reset(&archive_info, &archive_selected, &archive_scroll);
                             archive_selected = archive_stack_selected[archive_stack_depth - 1];
-                            archive_scroll = 0;
                         } else {
                             archive_stack_depth = 0;
                             current_mode = MODE_BROWSER;
@@ -880,14 +891,15 @@ int main() {
                         filebrowser_refresh(&browser);
                     }
                 } else if (pressed & SCE_CTRL_SQUARE) {
-                    if (archive_info.file_count > 0) {
-                        archive_selection_mask[archive_selected] = !archive_selection_mask[archive_selected];
-                    }
+                    if (archive_folder_count > 0)
+                        archive_folder_toggle_selection(archive_selected, &archive_info,
+                                                        archive_selection_mask);
                 } else if (pressed & SCE_CTRL_TRIANGLE) {
                     archive_actions_selected = 0;
                     current_mode = MODE_ARCHIVE_ACTIONS_MENU;
                 } else if (pressed & SCE_CTRL_SELECT) {
-                    const char *filename = archive_info.files[archive_selected].filename;
+                    if (selected_file_index < 0) break;
+                    const char *filename = archive_info.files[selected_file_index].filename;
                     int is_txt = is_viewable_text_file(filename);
                     int is_arch = is_archive_file(filename);
                     
@@ -932,7 +944,7 @@ int main() {
                             
    
                             sceIoMkdir(VPK_TEMP_DIR, 0777);
-                            int ext_res = archive_extract_file_custom(temp_dir, archive_selected, &archive_info);
+                            int ext_res = archive_extract_file_custom(temp_dir, selected_file_index, &archive_info);
                             if (ext_res == 0) {
                                 char real_file_path[1024];
                                 snprintf(real_file_path, sizeof(real_file_path), "%s/%s", VPK_TEMP_DIR, filename);
@@ -953,7 +965,7 @@ int main() {
                                 snprintf(temp_dir, sizeof(temp_dir), "%s/", VPK_TEMP_DIR);
                                 
                                 sceIoMkdir(VPK_TEMP_DIR, 0777);
-                                int ext_res = archive_extract_file_custom(temp_dir, archive_selected, &archive_info);
+                                int ext_res = archive_extract_file_custom(temp_dir, selected_file_index, &archive_info);
                                 if (ext_res == 0) {
                                     char real_file_path[1024];
                                     snprintf(real_file_path, sizeof(real_file_path), "%s/%s", VPK_TEMP_DIR, filename);
@@ -975,14 +987,15 @@ int main() {
                                     int open_res = try_open_archive_with_password(nested_temp_path, &archive_info);
                                     
                                     if (open_res >= 0) {
-                                        archive_selected = 0;
-                                        archive_scroll = 0;
+                                        memset(archive_selection_mask, 0, sizeof(archive_selection_mask));
+                                        archive_folder_reset(&archive_info, &archive_selected, &archive_scroll);
                                     } else {
                                         archive_stack_depth--;
                                         sceIoRemove(nested_temp_path);
                                         
                                         const char *parent_path = archive_stack[archive_stack_depth - 1];
-                                        try_open_archive_with_password(parent_path, &archive_info);
+                                        if (try_open_archive_with_password(parent_path, &archive_info) >= 0)
+                                            archive_folder_reset(&archive_info, &archive_selected, &archive_scroll);
                                     }
                                 }
                             }
@@ -1100,7 +1113,7 @@ int main() {
                     thread_started = 1;
                     extract_progress = 0;
                     worker_args.mode = (current_install_mode == INSTALL_MODE_APP) ? 2 : 3;
-                    worker_args.index = archive_selected;
+                    worker_args.index = archive_folder_file_index(archive_selected);
                     
                     worker_thread_id = sceKernelCreateThread("install_worker", worker_thread_func, 0x10000100, 0x10000, 0, 0, NULL);
                     if (worker_thread_id >= 0) {
@@ -1785,7 +1798,8 @@ int main() {
                             if (archive_selection_mask[i]) { has_sel = 1; break; }
                         }
                         if (!has_sel && archive_info.file_count > 0) {
-                            archive_selection_mask[archive_selected] = 1;
+                            archive_folder_toggle_selection(archive_selected, &archive_info,
+                                                            archive_selection_mask);
                         }
                         extract_selected_only = 2;
                         worker_args.mode = 7;
