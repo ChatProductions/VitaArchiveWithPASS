@@ -68,6 +68,7 @@ target_link_libraries(${PROJECT_NAME}
   SceMtpIfDriver_stub
   taihen_stub
   archive
+  zstd
   ftpvita
   freetype
   png
