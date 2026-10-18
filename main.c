@@ -367,18 +367,31 @@ static int try_open_archive(const char *path, ArchiveInfo *info) {
 }
 
 static int try_open_archive_with_password(const char *path, ArchiveInfo *info) {
+    /*
+     * Never reuse a password from an earlier failed opening or a different
+     * archive. Stale passwords previously suppressed the dialog until restart.
+     */
+    if (!info) return -1;
+    memset(info->password, 0, sizeof(info->password));
+
     int open_res = try_open_archive(path, info);
-    while (open_res == -5) {
+    int attempts = 0;
+    while (open_res == -5 && attempts < 3) {
         char pass_buf[128] = {0};
         const char *prompt_title = language_get(&lang, STR_ENTER_PASSWORD);
-        
-        if (get_ime_input(pass_buf, 120, prompt_title, NULL) == 0 && strlen(pass_buf) > 0) {
-            strncpy(info->password, pass_buf, sizeof(info->password) - 1);
-            open_res = try_open_archive(path, info);
-        } else {
+        if (get_ime_input(pass_buf, 120, prompt_title, NULL) != 0 || !pass_buf[0]) {
             open_res = -1;
             break;
         }
+        attempts++;
+        memset(info->password, 0, sizeof(info->password));
+        strncpy(info->password, pass_buf, sizeof(info->password) - 1);
+        memset(pass_buf, 0, sizeof(pass_buf));
+        open_res = try_open_archive(path, info);
+    }
+    if (open_res < 0) {
+        memset(info->password, 0, sizeof(info->password));
+        info->is_open = 0;
     }
     return open_res;
 }
